@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import SwiftUI
 import VibeZipCore
 
 final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolbarItemValidation, NSWindowDelegate, NSMenuItemValidation {
@@ -10,14 +11,23 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         queue.qualityOfService = .userInitiated; return queue
     }()
     let left: PaneController
-    private(set) var isBusy = false { didSet { window?.toolbar?.validateVisibleItems() } }
+    let right: PaneController
+    private weak var focusedPane: PaneController?
+    private var operationPane: PaneController?
+    private(set) var usesTwoPanes = false
+    private(set) var browserLayout: BrowserWindowLayout?
+    private(set) var isBusy = false { didSet { window?.toolbar?.validateVisibleItems(); browserLayout?.refresh() } }
+    private var shortcutWindow: NSWindowController?
+    private var viewPicker: NSSegmentedControl?
+    private var searchItem: NSSearchToolbarItem?
     var onIdle: (() -> Void)?
     private var currentToken: CancellationToken?
     private var progressWindow: OperationProgressWindow?
     private var lastLog = "No operations yet."
     private var auxiliaryWindows: [NSWindowController] = []
     private var temporaryFiles: [ScratchDirectory] = []
-    var activePane: PaneController { left }
+    var activePane: PaneController { usesTwoPanes ? (focusedPane ?? left) : left }
+    var panes: [PaneController] { [left, right] }
     var keepBackups: Bool { UserDefaults.standard.bool(forKey: "keepBackups") }
     var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 }
     var canAcceptCommands: Bool { !isBusy && window?.attachedSheet == nil && NSApp.modalWindow == nil }
@@ -25,34 +35,45 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     init(service: ArchiveService) {
         self.service = service
         left = PaneController(directory: directoryAccess.restoreLastDirectory())
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1050, height: 680),
+        right = PaneController(directory: nil)
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 740),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "VibeZip"; window.minSize = NSSize(width: 720, height: 440)
-        window.isReleasedWhenClosed = false; window.setFrameAutosaveName("VibeZip.MainWindow.Native")
+        window.title = "VibeZip"; window.minSize = NSSize(width: 850, height: 520)
+        window.isReleasedWhenClosed = false; window.setFrameAutosaveName("VibeZip.MainWindow.Sevenfold")
         super.init(window: window)
         window.delegate = self
-        left.owner = self
-        window.contentView = left.view
-        left.status.onDetails = { [weak self] in self?.showLastLog(nil) }
-        left.status.onCancel = { [weak self] in self?.progressWindow?.showCancelling() }
-        let toolbar = NSToolbar(identifier: "VibeZip.Toolbar.Native"); toolbar.delegate = self
+        left.owner = self; right.owner = self
+        let layout = BrowserWindowLayout(owner: self); browserLayout = layout
+        window.contentViewController = layout
+        for pane in panes {
+            pane.status.onDetails = { [weak self] in self?.showLastLog(nil) }
+            pane.status.onCancel = { [weak self] in self?.progressWindow?.showCancelling() }
+        }
+        let toolbar = NSToolbar(identifier: "VibeZip.Toolbar.Sevenfold"); toolbar.delegate = self
         toolbar.displayMode = .iconAndLabel; toolbar.allowsUserCustomization = true; toolbar.autosavesConfiguration = true
         window.toolbar = toolbar; window.toolbarStyle = .unified
-        migrateToolbar(toolbar)
-        left.table.menu = makeContextMenu()
+        for pane in panes { pane.table.menu = makeContextMenu(); pane.collection.menu = makeContextMenu() }
         applyPreferences(); activate(left)
+        if UserDefaults.standard.bool(forKey: "twoPanels") { toggleTwoPanels(nil) }
         NotificationCenter.default.addObserver(self, selector: #selector(appActivated), name: NSApplication.didBecomeActiveNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     deinit { NotificationCenter.default.removeObserver(self) }
     func activate(_ pane: PaneController) {
-        window?.makeFirstResponder(pane.table); updateTitle()
+        guard !isBusy || pane === activePane else { return }
+        focusedPane = pane
+        pane.focusFiles(); updateTitle()
+        viewPicker?.selectedSegment = pane.viewStyle.rawValue
+        searchItem?.searchField = pane.search
+        panes.forEach { $0.setActive($0 === pane, framed: usesTwoPanes) }
     }
     func updateTitle() {
         let name = activePane.location.archive?.url.lastPathComponent ?? activePane.suggestedDirectory?.lastPathComponent
         window?.title = name.map { "VibeZip — " + $0 } ?? "VibeZip"
-        if let directory = left.location.directory { directoryAccess.remember(directory) }
+        window?.subtitle = activePane.location.archive.map { $0.listing.format.uppercased() + " archive" } ?? "Archive manager"
+        if let directory = activePane.location.directory { directoryAccess.remember(directory) }
         window?.toolbar?.validateVisibleItems()
+        browserLayout?.refresh()
     }
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if hasActiveOperations { NSSound.beep(); return false }
@@ -60,35 +81,37 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     @objc private func appActivated() {
         guard canAcceptCommands, !hasActiveOperations else { return }
-        directoryAccess.refreshUnavailable(); left.discardRevokedLocations()
+        directoryAccess.refreshUnavailable(); panes.forEach { $0.discardRevokedLocations() }
     }
     func applyPreferences() {
         let defaults = UserDefaults.standard
         let configuredLimit = max(1, min(100_000, defaults.integer(forKey: "extractionLimitGiB")))
         service.extractionLimit = UInt64(configuredLimit) * 1024 * 1024 * 1024
-        left.refresh()
+        left.updateKeyTips()
+        panes.forEach { $0.refresh() }
     }
     func perform<T>(_ title: String, showCompletion: Bool = true, work: @escaping (CancellationToken, @escaping (String) -> Void) throws -> T,
                     success: @escaping (T) -> Void = { _ in }, failure: ((Error) -> Void)? = nil) {
         guard canAcceptCommands, window != nil else { return }
         isBusy = true; let token = CancellationToken(); currentToken = token
-        left.status.begin(title, token: token)
+        let pane = activePane; operationPane = pane
+        pane.status.begin(title, token: token)
         let startedAt = ProcessInfo.processInfo.systemUptime
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self, weak token] in
             guard let self = self, let token = token, self.currentToken === token, !token.isCancelled,
                   let window = self.window, window.isVisible else { return }
             let progress = OperationProgressWindow(title: title, token: token, startedAt: startedAt,
                 cancel: { [weak self] in self?.cancelCurrent(nil) })
-            progress.append(self.left.status.message.stringValue)
-            if let value = self.left.status.currentProgress { progress.update(value) }
+            progress.append(pane.status.message.stringValue)
+            if let value = pane.status.currentProgress { progress.update(value) }
             self.progressWindow = progress; progress.show(attachedTo: window)
         }
         let output = JobOutput(receive: { [weak self] chunk in
             guard let self = self, self.currentToken === token else { return }
-            self.left.status.append(chunk); self.progressWindow?.append(chunk)
+            pane.status.append(chunk); self.progressWindow?.append(chunk)
         }, progress: { [weak self] value in
             guard let self = self, self.currentToken === token else { return }
-            self.left.status.update(value); self.progressWindow?.update(value)
+            pane.status.update(value); self.progressWindow?.update(value)
         })
         token.observeProgress(output.emitProgress)
         workQueue.addOperation { [weak self] in
@@ -99,28 +122,29 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 guard let self = self else { return }
                 output.flush(); self.lastLog = title + "\n" + output.log
                 self.progressWindow?.close(); self.progressWindow = nil
-                self.isBusy = false; self.currentToken = nil; self.left.status.finish()
+                self.isBusy = false; self.currentToken = nil; pane.status.finish()
                 switch result {
                 case .success(let value):
                     self.lastLog += "\nCompleted."
-                    if showCompletion { self.left.status.showMessage(title + " completed.") }
+                    if showCompletion { pane.status.showMessage(title + " completed.") }
                     success(value)
                 case .failure(let error):
                     self.lastLog += "\n" + error.localizedDescription
                     if case FMError.cancelled = error {
-                        self.left.status.showMessage("Cancelled. Completed file copies are kept.")
+                        pane.status.showMessage("Cancelled. Completed file copies are kept.")
                     } else if let failure = failure { failure(error) } else { self.reportError(error) }
                 }
                 self.updateTitle()
+                self.operationPane = nil
                 self.onIdle?()
             }
         }
     }
-    @objc func cancelCurrent(_ sender: Any?) { left.status.cancelJob() }
+    @objc func cancelCurrent(_ sender: Any?) { (operationPane ?? activePane).status.cancelJob() }
     func reportError(_ error: Error) {
         if case FMError.cancelled = error { return }
         if !lastLog.hasSuffix(error.localizedDescription) { lastLog += "\n" + error.localizedDescription }
-        left.status.showMessage(error.localizedDescription, error: true)
+        (operationPane ?? activePane).status.showMessage(error.localizedDescription, error: true)
     }
     func showText(_ title: String, _ text: String) {
         let controller = TextWindow(title: title, text: text); auxiliaryWindows.append(controller); controller.showWindow(nil)
@@ -366,14 +390,14 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         }, success: { [weak self] _, listing in
             guard let self = self else { return }
             if let listing = listing { self.updateContexts(archive.url, listing: listing) }
-            else { self.left.status.showMessage("Changes saved. Refresh to reload the archive.") }
+            else { self.activePane.status.showMessage("Changes saved. Refresh to reload the archive.") }
             self.refreshFilePanes()
         }, failure: archiveFailure(archive, retry: { [weak self] in self?.mutateJob(title, archive: archive, operation: operation) }))
     }
     private func updateContexts(_ url: URL, listing: ArchiveListing) {
-        left.refresh()
+        panes.forEach { $0.refresh() }
     }
-    private func refreshFilePanes() { for pane in [left] where pane.location.directory != nil { pane.refresh() } }
+    private func refreshFilePanes() { for pane in panes where pane.location.directory != nil { pane.refresh() } }
     @objc func extractArchive(_ sender: Any?) {
         guard canAcceptCommands else { return }
         let pane = activePane
@@ -427,7 +451,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     @objc func refreshAll(_ sender: Any?) {
         guard !isBusy else { return }
-        let archives = [left.location.archive].compactMap { $0 }
+        var seen = Set<UUID>()
+        let archives = panes.compactMap { $0.location.archive }.filter { seen.insert($0.id).inserted }
         if archives.isEmpty { refreshFilePanes(); return }
         let service = self.service
         perform("Refresh archive", showCompletion: false, work: { token, _ in
@@ -498,7 +523,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     @objc func moveTo(_ sender: Any?) { transfer(move: true) }
     private func transfer(move: Bool) {
         guard !isBusy, !activePane.selectedRows.isEmpty else { return }
-        guard let suggested = activePane.suggestedDirectory,
+        let other = activePane === left ? right : left
+        guard let suggested = (usesTwoPanes ? other.location.directory : nil) ?? activePane.suggestedDirectory,
               let (directory, policy) = Dialogs.destination(title: move ? "Move To…" : "Copy To…", suggested: suggested),
               ensureFolderAccess(directory) else { return }
         let pane = activePane
@@ -595,24 +621,37 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         }
     }
     @objc func properties(_ sender: Any?) {
-        let pane = activePane; let rows = pane.selectedRows
-        var lines: [String] = []
-        if rows.isEmpty, let archive = pane.location.archive {
-            lines.append(archive.url.path + "\n")
-            lines += archive.listing.properties.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" }
-            lines += ["", "Entries: \(archive.listing.entries.count)", "Unpacked size: \(UIFormat.bytes(archive.listing.totalSize))"]
-        } else {
-            for row in rows {
-                lines += [row.path, String(repeating: "─", count: 60)]
-                if let entry = row.member { lines += entry.properties.sorted { $0.key < $1.key }.map { "\($0.key): \($0.value)" } }
-                else if let url = row.url, let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
-                    lines += attrs.sorted { $0.key.rawValue < $1.key.rawValue }.map { "\($0.key.rawValue): \($0.value)" }
-                }
-                lines.append("")
-            }
+        browserLayout?.toggleInfo()
+    }
+    @objc func toggleTwoPanels(_ sender: Any?) {
+        guard canAcceptCommands else { return }
+        usesTwoPanes.toggle()
+        UserDefaults.standard.set(usesTwoPanes, forKey: "twoPanels")
+        browserLayout?.setTwoPanes(usesTwoPanes)
+        if usesTwoPanes && right.location.isEmpty { right.navigate(left.location) }
+        activate(usesTwoPanes ? activePane : left)
+    }
+    func switchPane() {
+        if usesTwoPanes && canAcceptCommands { activate(activePane === left ? right : left) }
+    }
+    @objc func togglePlaces(_ sender: Any?) { browserLayout?.togglePlaces() }
+    @objc func toggleKeyTips(_ sender: Any?) {
+        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "showKeyTips"), forKey: "showKeyTips")
+        left.updateKeyTips()
+    }
+    @objc func showShortcuts(_ sender: Any?) {
+        if shortcutWindow == nil {
+            let window = NSWindow(contentViewController: NSHostingController(rootView: ShortcutMapView()))
+            window.styleMask = [.titled, .closable]; window.title = "Shortcut Map"
+            window.isReleasedWhenClosed = false; window.center()
+            shortcutWindow = NSWindowController(window: window)
         }
-        if lines.isEmpty { lines = [pane.location.display] }
-        showText("Info", lines.joined(separator: "\n"))
+        shortcutWindow?.showWindow(nil)
+    }
+    @objc func changeViewStyle(_ sender: Any?) {
+        let index = (sender as? NSSegmentedControl)?.selectedSegment ?? (sender as? NSMenuItem)?.tag ?? 2
+        guard let style = BrowserViewStyle(rawValue: index) else { return }
+        activePane.setViewStyle(style); viewPicker?.selectedSegment = index
     }
     @objc func revealInFinder(_ sender: Any?) {
         let urls = activePane.selectedURLs
@@ -629,15 +668,21 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "showHidden"), forKey: "showHidden"); applyPreferences()
     }
     @objc func showPreferences(_ sender: Any?) {
+        editPreferences(folderAccess: false)
+    }
+    @objc func showFolderAccess(_ sender: Any?) {
+        editPreferences(folderAccess: true)
+    }
+    private func editPreferences(folderAccess: Bool) {
         guard canAcceptCommands, !hasActiveOperations else { return }
         defer { onIdle?() }
-        let changed = Dialogs.preferences()
-        left.discardRevokedLocations()
+        let changed = Dialogs.preferences(folderAccess: folderAccess)
+        panes.forEach { $0.discardRevokedLocations() }
         if changed { applyPreferences() }
     }
     @objc func forgetPasswords(_ sender: Any?) {
         service.forgetPasswords()
-        left.status.showMessage("Passwords cleared.")
+        activePane.status.showMessage("Passwords cleared.")
     }
     @objc func showLastLog(_ sender: Any?) { showText("Last operation log", lastLog) }
     @objc func engineInformation(_ sender: Any?) {
@@ -690,14 +735,16 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
 
     private var toolbarItems: [(String, String, String, Selector)] {
         [
+            ("sidebar", "Sidebar", "sidebar.left", #selector(togglePlaces)),
+            ("twoPanels", "2 Panels", "rectangle.split.2x1", #selector(toggleTwoPanels)),
             ("back", "Back", "chevron.left", #selector(goBack)),
             ("forward", "Forward", "chevron.right", #selector(goForward)),
             ("up", "Up", "arrow.up", #selector(goUp)),
-            ("add", "Add", "plus.rectangle.on.folder", #selector(addArchive)),
-            ("extract", "Extract", "arrow.down.doc", #selector(extractArchive)),
-            ("test", "Test", "checkmark.shield", #selector(testArchive)),
+            ("add", "Add", "archivebox", #selector(addArchive)),
+            ("extract", "Extract", "square.and.arrow.up.on.square", #selector(extractArchive)),
+            ("test", "Test", "checkmark.seal", #selector(testArchive)),
             ("copy", "Copy", "doc.on.doc", #selector(copyTo)),
-            ("move", "Move", "arrow.right.doc.on.clipboard", #selector(moveTo)),
+            ("move", "Move", "folder", #selector(moveTo)),
             ("delete", "Delete", "trash", #selector(deleteSelected)),
             ("preview", "Preview", "eye", #selector(previewSelected)),
             ("info", "Info", "info.circle", #selector(properties)),
@@ -705,32 +752,32 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         ]
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarItems.map { NSToolbarItem.Identifier($0.0) } + [.flexibleSpace, .space]
+        toolbarItems.map { NSToolbarItem.Identifier($0.0) } + [NSToolbarItem.Identifier("viewStyle"), NSToolbarItem.Identifier("search"), .flexibleSpace, .space]
     }
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        ["back", "forward", "up"].map { NSToolbarItem.Identifier($0) } + [.flexibleSpace] +
-            ["add", "extract", "test", "copy", "move", "delete", "preview", "info"].map { NSToolbarItem.Identifier($0) }
-    }
-    private func migrateToolbar(_ toolbar: NSToolbar) {
-        let defaults = UserDefaults.standard
-        guard !defaults.bool(forKey: "toolbarHasNavigationAndPreview") else { return }
-        // Preserve saved arrangements while adding the newly available default actions once.
-        for id in ["up", "forward", "back"] where !toolbar.items.contains(where: { $0.itemIdentifier.rawValue == id }) {
-            toolbar.insertItem(withItemIdentifier: NSToolbarItem.Identifier(id), at: 0)
-        }
-        if !toolbar.items.contains(where: { $0.itemIdentifier == .flexibleSpace }) {
-            toolbar.insertItem(withItemIdentifier: .flexibleSpace, at: min(3, toolbar.items.count))
-        }
-        if !toolbar.items.contains(where: { $0.itemIdentifier.rawValue == "preview" }) {
-            let index = toolbar.items.firstIndex { $0.itemIdentifier.rawValue == "info" } ?? toolbar.items.count
-            toolbar.insertItem(withItemIdentifier: NSToolbarItem.Identifier("preview"), at: index)
-        }
-        defaults.set(true, forKey: "toolbarHasNavigationAndPreview")
+        ["sidebar", "back", "forward"].map { NSToolbarItem.Identifier($0) } + [.flexibleSpace] +
+            ["add", "extract", "test"].map { NSToolbarItem.Identifier($0) } + [.space] +
+            ["copy", "move", "delete", "preview", "info", "viewStyle", "twoPanels", "search"].map { NSToolbarItem.Identifier($0) }
     }
     func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        if itemIdentifier.rawValue == "search" {
+            let item = NSSearchToolbarItem(itemIdentifier: itemIdentifier)
+            item.searchField = activePane.search; item.label = "Filter"; item.paletteLabel = "Filter"
+            item.visibilityPriority = .high; searchItem = item; return item
+        }
+        if itemIdentifier.rawValue == "viewStyle" {
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier); item.label = "View"; item.paletteLabel = "View"
+            let picker = NSSegmentedControl(images: ["square.grid.2x2", "list.bullet", "list.bullet.rectangle"].map {
+                NSImage(systemSymbolName: $0, accessibilityDescription: nil)!
+            }, trackingMode: .selectOne, target: self, action: #selector(changeViewStyle))
+            picker.selectedSegment = activePane.viewStyle.rawValue
+            for (index, title) in ["Icons", "List", "Details"].enumerated() { picker.setToolTip(title, forSegment: index) }
+            picker.setAccessibilityLabel("File view")
+            item.view = picker; viewPicker = picker; return item
+        }
         guard let definition = toolbarItems.first(where: { $0.0 == itemIdentifier.rawValue }) else { return nil }
-        let isNavigation = ["back", "forward", "up"].contains(definition.0)
+        let isNavigation = ["sidebar", "back", "forward", "up"].contains(definition.0)
         let item = NSToolbarItem(itemIdentifier: itemIdentifier)
         item.label = isNavigation ? "" : definition.1; item.paletteLabel = definition.1
         item.isNavigational = isNavigation
@@ -776,10 +823,16 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         if menuItem.action == #selector(toggleHidden) {
             menuItem.state = UserDefaults.standard.bool(forKey: "showHidden") ? .on : .off
         }
+        if menuItem.action == #selector(togglePlaces) { menuItem.state = browserLayout?.placesItem.isCollapsed == false ? .on : .off }
+        if menuItem.action == #selector(properties) { menuItem.state = browserLayout?.infoItem.isCollapsed == false ? .on : .off }
+        if menuItem.action == #selector(toggleKeyTips) { menuItem.state = UserDefaults.standard.bool(forKey: "showKeyTips") ? .on : .off }
+        if menuItem.action == #selector(changeViewStyle) { menuItem.state = menuItem.tag == activePane.viewStyle.rawValue ? .on : .off }
+        if menuItem.action == #selector(toggleTwoPanels) { menuItem.state = usesTwoPanes ? .on : .off }
         return isActionEnabled(menuItem.action)
     }
     private func isActionEnabled(_ action: Selector?) -> Bool {
-        if action == #selector(showPreferences) { return !hasActiveOperations }
+        if [#selector(togglePlaces), #selector(toggleKeyTips), #selector(showShortcuts), #selector(properties), #selector(changeViewStyle), #selector(toggleTwoPanels)].contains(action) { return true }
+        if [#selector(showPreferences), #selector(showFolderAccess)].contains(action) { return !hasActiveOperations }
         if activePane.location.isEmpty {
             return [#selector(chooseOpen), #selector(chooseFolder), #selector(focusAddress), #selector(showHelp), #selector(showPrivacyPolicy),
                     #selector(showLastLog), #selector(engineInformation), #selector(forgetPasswords), #selector(toggleHidden)].contains(action)

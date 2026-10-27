@@ -1,7 +1,8 @@
 # Architecture
 
 VibeZip provides a native file-manager interface over the archive interfaces in
-this 7-Zip fork. The macOS UI is implemented in AppKit; the Windows File Manager
+this 7-Zip fork. The macOS UI uses AppKit controllers and SwiftUI presentation;
+the Windows File Manager
 UI is not embedded. Archive operations run inside the application process, with
 no shell command construction or console-output parsing.
 
@@ -19,6 +20,7 @@ flowchart TD
 | Component | Responsibility | Source |
 | --- | --- | --- |
 | AppKit UI | Navigation, selection, command validation, operation feedback and local preview | [VibeZip/](../macOS/Sources/VibeZip/) |
+| SwiftUI browser chrome | Sidebar, shortcut strip and live Info inspector hosted in a native split view; no separate archive state or simulated operations | [BrowserChrome.swift](../macOS/Sources/VibeZip/BrowserChrome.swift) |
 | Archive service | Session lifetime, extraction policy, verified updates and nested writeback | [ArchiveService.swift](../macOS/Sources/VibeZipCore/ArchiveService.swift) |
 | Metadata and file operations | Entry identity, directory index, path validation, safe copying and staging | [Models.swift](../macOS/Sources/VibeZipCore/Models.swift), [FileOperations.swift](../macOS/Sources/VibeZipCore/FileOperations.swift) |
 | Swift engine adapter | Native handle ownership, callbacks and error translation | [Engine.swift](../macOS/Sources/VibeZipCore/Engine.swift) |

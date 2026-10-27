@@ -29,7 +29,7 @@ if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app/Contents/Develope
     export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
 export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
-export MACOSX_DEPLOYMENT_TARGET=13.0
+export MACOSX_DEPLOYMENT_TARGET=26.0
 export CLANG_MODULE_CACHE_PATH="$VIBEZIP_ROOT/.build/clang-module-cache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$VIBEZIP_ROOT/.build/swift-module-cache"
 export LC_ALL=en_US.UTF-8 LANG=en_US.UTF-8

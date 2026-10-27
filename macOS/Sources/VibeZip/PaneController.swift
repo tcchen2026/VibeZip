@@ -47,7 +47,7 @@ final class ArchiveFilePromise: NSObject, NSFilePromiseProviderDelegate {
     }
 }
 
-final class PaneController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSMenuItemValidation {
+final class PaneController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSMenuItemValidation, NSCollectionViewDataSource, NSCollectionViewDelegate {
     weak var owner: MainWindowController?
     var location: BrowserLocation
     private(set) var rows: [BrowserRow] = []
@@ -58,7 +58,18 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     private var loadingID = UUID()
     private var promiseDelegates: [ArchiveFilePromise] = []
     private let emptyState = NSStackView()
+    private let emptyHeading = NSTextField(labelWithString: "")
+    private let emptyExplanation = NSTextField(wrappingLabelWithString: "")
+    private let emptyIcon = NSImageView()
+    private let chooseButton = NSButton(title: "Choose Folder…", target: nil, action: nil)
+    private let upButton = NSButton(image: NSImage(systemSymbolName: "arrow.up", accessibilityDescription: "Up one level")!, target: nil, action: nil)
+    private let historyButton = NSPopUpButton(frame: .zero, pullsDown: true)
     let table = FileTableView()
+    let collection = FileCollectionView()
+    private let gridScroll = NSScrollView()
+    private var detailsHeader: NSTableHeaderView?
+    private var syncingSelection = false
+    private(set) var viewStyle = BrowserViewStyle(rawValue: UserDefaults.standard.integer(forKey: "browserViewStyle")) ?? .details
     private let locationBar = LocationBar()
     var address: NSTextField { locationBar.editor }
     let search = NSSearchField()
@@ -66,6 +77,10 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     var canGoBack: Bool { historyIndex > 0 }
     var canGoForward: Bool { historyIndex + 1 < history.count }
     var canGoUp: Bool { !location.isEmpty && (location.directory.map { $0.path != "/" } ?? true) }
+    var recentLocations: [BrowserLocation] {
+        var seen = Set<String>()
+        return history.reversed().filter { seen.insert($0.identity).inserted }
+    }
     private var query: String { search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
     var isSearchingArchive: Bool { location.archive != nil && !query.isEmpty }
 
@@ -75,7 +90,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override func loadView() {
-        view = NSView()
+        view = BrowserBackgroundView()
         locationBar.canEdit = { [weak self] in self?.owner?.canAcceptCommands == true }
         locationBar.onSubmit = { [weak self] path in self?.addressEntered(path) }
         locationBar.onCancel = { [weak self] in
@@ -88,10 +103,11 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         table.headerView = NSTableHeaderView(); table.usesAlternatingRowBackgroundColors = true
         table.allowsMultipleSelection = true; table.allowsColumnReordering = true; table.allowsColumnResizing = true
         table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
-        table.rowHeight = 27; table.intercellSpacing = NSSize(width: 10, height: 3)
+        table.style = .inset
+        table.rowHeight = 29; table.intercellSpacing = NSSize(width: 10, height: 3)
         table.dataSource = self; table.delegate = self; table.target = self; table.doubleAction = #selector(openDoubleClick)
         let columns: [(String, String, CGFloat)] = [
-            ("name", "Name", 300), ("location", "Location", 240), ("size", "Size", 100), ("packed", "Packed", 100),
+            ("name", "Name", 300), ("location", "Location", 240), ("size", "Size", 100), ("packed", "Packed Size", 100),
             ("modified", "Modified", 156), ("type", "Type", 100), ("crc", "CRC", 95), ("method", "Method", 135)
         ]
         let visibleColumns = Set(UserDefaults.standard.stringArray(forKey: "visibleBrowserColumns") ?? ["name", "size", "packed", "modified"])
@@ -108,6 +124,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
             }
         }
         table.headerView?.menu = columnMenu
+        detailsHeader = table.headerView
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
         table.onFocus = { [weak self] in guard let self = self else { return }; self.owner?.activate(self) }
         table.onKey = { [weak self] event in self?.handleKey(event) ?? false }
@@ -117,26 +134,47 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         let scroll = NSScrollView(); scroll.documentView = table
         scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = true; scroll.autohidesScrollers = true
         scroll.borderType = .noBorder
-        let heading = NSTextField(labelWithString: "Choose a folder to get started")
-        heading.font = .systemFont(ofSize: 17, weight: .medium)
-        let explanation = NSTextField(wrappingLabelWithString: "Allow VibeZip to browse a folder and its contents.\nManage saved folder access in Settings.")
-        explanation.alignment = .center; explanation.textColor = .secondaryLabelColor
-        let choose = NSButton(title: "Choose Folder…", target: self, action: #selector(chooseFolder))
-        choose.bezelStyle = .rounded
+        let flow = NSCollectionViewFlowLayout()
+        flow.itemSize = NSSize(width: 110, height: 100); flow.minimumInteritemSpacing = 8; flow.minimumLineSpacing = 12
+        flow.sectionInset = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        collection.collectionViewLayout = flow; collection.dataSource = self; collection.delegate = self
+        collection.isSelectable = true; collection.allowsMultipleSelection = true
+        collection.register(FileGridItem.self, forItemWithIdentifier: NSUserInterfaceItemIdentifier("file"))
+        collection.onFocus = { [weak self] in guard let self = self else { return }; self.owner?.activate(self) }
+        collection.onKey = { [weak self] event in self?.handleKey(event) ?? false }
+        collection.onOpen = { [weak self] in self?.owner?.openAsArchive(nil) }
+        collection.registerForDraggedTypes([.fileURL])
+        collection.setDraggingSourceOperationMask(.copy, forLocal: false)
+        collection.setDraggingSourceOperationMask(.copy, forLocal: true)
+        gridScroll.documentView = collection; gridScroll.hasVerticalScroller = true; gridScroll.autohidesScrollers = true
+        emptyHeading.font = .systemFont(ofSize: 19, weight: .semibold)
+        emptyExplanation.alignment = .center; emptyExplanation.textColor = .secondaryLabelColor
+        emptyIcon.contentTintColor = .tertiaryLabelColor
+        emptyIcon.symbolConfiguration = .init(pointSize: 48, weight: .light)
+        chooseButton.target = self; chooseButton.action = #selector(chooseFolder); chooseButton.bezelStyle = .rounded
         emptyState.orientation = .vertical; emptyState.spacing = 12; emptyState.alignment = .centerX
-        for child in [heading as NSView, explanation, choose] { emptyState.addArrangedSubview(child) }
+        for child in [emptyIcon as NSView, emptyHeading, emptyExplanation, chooseButton] { emptyState.addArrangedSubview(child) }
         let listContainer = NSView()
-        for child in [scroll as NSView, emptyState] { child.translatesAutoresizingMaskIntoConstraints = false; listContainer.addSubview(child) }
+        for child in [scroll as NSView, gridScroll, emptyState] { child.translatesAutoresizingMaskIntoConstraints = false; listContainer.addSubview(child) }
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: listContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: listContainer.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: listContainer.topAnchor), scroll.bottomAnchor.constraint(equalTo: listContainer.bottomAnchor),
+            gridScroll.leadingAnchor.constraint(equalTo: listContainer.leadingAnchor), gridScroll.trailingAnchor.constraint(equalTo: listContainer.trailingAnchor),
+            gridScroll.topAnchor.constraint(equalTo: listContainer.topAnchor), gridScroll.bottomAnchor.constraint(equalTo: listContainer.bottomAnchor),
             emptyState.centerXAnchor.constraint(equalTo: listContainer.centerXAnchor), emptyState.centerYAnchor.constraint(equalTo: listContainer.centerYAnchor),
             emptyState.widthAnchor.constraint(lessThanOrEqualTo: listContainer.widthAnchor, constant: -48)
         ])
         let pathContainer = NSView(); let statusContainer = NSView()
+        upButton.target = self; upButton.action = #selector(goUp); upButton.bezelStyle = .texturedRounded
+        upButton.toolTip = "Up one level (Backspace)"; upButton.isBordered = false
+        historyButton.bezelStyle = .texturedRounded; historyButton.isBordered = false
+        historyButton.toolTip = "Folders History"
         locationBar.translatesAutoresizingMaskIntoConstraints = false; search.translatesAutoresizingMaskIntoConstraints = false
         status.translatesAutoresizingMaskIntoConstraints = false
-        pathContainer.addSubview(locationBar); pathContainer.addSubview(search); statusContainer.addSubview(status)
+        for child in [upButton, locationBar, historyButton] {
+            child.translatesAutoresizingMaskIntoConstraints = false; pathContainer.addSubview(child)
+        }
+        statusContainer.addSubview(status)
         let topSeparator = NSBox(); topSeparator.boxType = .separator
         let bottomSeparator = NSBox(); bottomSeparator.boxType = .separator
         let stack = NSStackView(views: [pathContainer, topSeparator, listContainer, bottomSeparator, statusContainer]); stack.orientation = .vertical
@@ -145,22 +183,25 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         NSLayoutConstraint.activate([
             stack.leadingAnchor.constraint(equalTo: view.leadingAnchor), stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             stack.topAnchor.constraint(equalTo: view.topAnchor), stack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            pathContainer.heightAnchor.constraint(equalToConstant: 44), pathContainer.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            locationBar.leadingAnchor.constraint(equalTo: pathContainer.leadingAnchor, constant: 12),
-            locationBar.trailingAnchor.constraint(equalTo: search.leadingAnchor, constant: -10),
+            pathContainer.heightAnchor.constraint(equalToConstant: 50), pathContainer.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            upButton.leadingAnchor.constraint(equalTo: pathContainer.leadingAnchor, constant: 10),
+            upButton.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor), upButton.widthAnchor.constraint(equalToConstant: 28),
+            locationBar.leadingAnchor.constraint(equalTo: upButton.trailingAnchor, constant: 6),
+            locationBar.trailingAnchor.constraint(equalTo: historyButton.leadingAnchor, constant: -4),
             locationBar.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor),
-            locationBar.heightAnchor.constraint(equalToConstant: 26),
-            search.trailingAnchor.constraint(equalTo: pathContainer.trailingAnchor, constant: -12),
-            search.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor),
-            search.widthAnchor.constraint(equalToConstant: 220),
+            locationBar.heightAnchor.constraint(equalToConstant: 32),
+            historyButton.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor), historyButton.widthAnchor.constraint(equalToConstant: 32),
+            historyButton.trailingAnchor.constraint(equalTo: pathContainer.trailingAnchor, constant: -8),
             topSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor), bottomSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
             listContainer.widthAnchor.constraint(equalTo: stack.widthAnchor), statusContainer.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            statusContainer.heightAnchor.constraint(equalToConstant: 28),
+            statusContainer.heightAnchor.constraint(equalToConstant: 30),
             status.leadingAnchor.constraint(equalTo: statusContainer.leadingAnchor, constant: 12),
             status.trailingAnchor.constraint(equalTo: statusContainer.trailingAnchor, constant: -12),
             status.centerYAnchor.constraint(equalTo: statusContainer.centerYAnchor),
             listContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 180)
         ])
+        updateKeyTips()
+        setViewStyle(viewStyle, focus: false)
     }
     override func viewDidLoad() { super.viewDidLoad(); navigate(location) }
 
@@ -184,7 +225,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         if let directory = newLocation.directory, owner?.ensureFolderAccess(directory) != true { return false }
         status.clearNotice()
         location = newLocation; search.stringValue = ""
-        archiveListing = nil; allRows = []; rows = []; table.reloadData()
+        archiveListing = nil; allRows = []; rows = []; table.reloadData(); collection.reloadData()
         if record && !newLocation.isEmpty && (historyIndex < 0 || history[historyIndex].identity != newLocation.identity) {
             if historyIndex + 1 < history.count { history.removeSubrange((historyIndex + 1)..<history.count) }
             history.append(newLocation)
@@ -195,7 +236,9 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
     func refresh() {
         locationBar.show(path: location.display, components: location.breadcrumbTitles)
-        emptyState.isHidden = !location.isEmpty; table.enclosingScrollView?.isHidden = location.isEmpty
+        updateEmptyState(loading: !location.isEmpty)
+        upButton.isEnabled = canGoUp && owner?.isBusy != true
+        updateHistory()
         search.isEnabled = !location.isEmpty
         search.placeholderString = location.archive == nil ? "Search this folder" : "Search archive"
         search.toolTip = location.archive == nil ? "Search names in this folder" : "Search names and paths throughout this archive"
@@ -245,6 +288,36 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         else { refresh() }
     }
     @objc private func chooseFolder() { owner?.chooseFolder(nil) }
+    func updateKeyTips() { owner?.browserLayout?.updateKeyTips() }
+    func setActive(_ active: Bool, framed: Bool) {
+        view.wantsLayer = true; view.layer?.cornerRadius = framed ? 10 : 0
+        view.layer?.borderWidth = framed ? (active ? 2 : 1) : 0
+        view.layer?.borderColor = (active ? NSColor.controlAccentColor.withAlphaComponent(0.65) : NSColor.separatorColor).cgColor
+    }
+    private func updateEmptyState(loading: Bool = false) {
+        emptyState.isHidden = loading || (!location.isEmpty && !rows.isEmpty)
+        table.enclosingScrollView?.isHidden = location.isEmpty || viewStyle == .icons
+        gridScroll.isHidden = location.isEmpty || viewStyle != .icons
+        emptyIcon.image = NSImage(systemSymbolName: query.isEmpty ? "folder" : "magnifyingglass", accessibilityDescription: nil)
+        emptyHeading.stringValue = location.isEmpty ? "Choose a folder to get started" : (query.isEmpty ? "Empty Folder" : "No Results")
+        emptyExplanation.stringValue = location.isEmpty ? "Allow VibeZip to browse a folder and its contents.\nYour saved folders will appear in the sidebar." :
+            (query.isEmpty ? "Drop files here or use Add to put something in it." : "No items match “\(query)”. Try a different search.")
+        chooseButton.isHidden = !location.isEmpty
+    }
+    private func updateHistory() {
+        historyButton.removeAllItems()
+        historyButton.addItem(withTitle: "")
+        historyButton.item(at: 0)?.image = NSImage(systemSymbolName: "clock.arrow.circlepath", accessibilityDescription: "Folders History")
+        for location in recentLocations {
+            let item = NSMenuItem(title: location.display, action: #selector(visitHistory), keyEquivalent: "")
+            item.target = self; item.representedObject = location; historyButton.menu?.addItem(item)
+        }
+        historyButton.isEnabled = !recentLocations.isEmpty
+    }
+    @objc private func visitHistory(_ sender: NSMenuItem) {
+        guard owner?.canAcceptCommands == true, let location = sender.representedObject as? BrowserLocation else { return }
+        if navigate(location) { owner?.activate(self) }
+    }
     private func applyFilter() {
         let selection = Set(selectedRows.map(\.identity))
         let query = self.query
@@ -253,7 +326,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         } else {
             rows = allRows.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
         }
-        table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("location"))?.isHidden = !isSearchingArchive
+        table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("location"))?.isHidden = !isSearchingArchive || viewStyle == .list
         let descriptor = table.sortDescriptors.first
         let key = descriptor?.key ?? "name"; let ascending = descriptor?.ascending ?? true
         rows.sort { first, second in
@@ -277,21 +350,23 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
             return ascending ? comparison == .orderedAscending : comparison == .orderedDescending
         }
         table.reloadData()
+        collection.reloadData()
         table.selectRowIndexes(IndexSet(rows.indices.filter { selection.contains(rows[$0].identity) }), byExtendingSelection: false)
+        updateEmptyState()
         updateStatus()
     }
     private func updateStatus() {
         let selected = selectedRows
-        let total = selected.reduce(UInt64(0)) { sum, row in
-            let (next, overflow) = sum.addingReportingOverflow(row.size ?? 0); return overflow ? UInt64.max : next
-        }
+        let total = UIFormat.totalSize(selected.isEmpty ? rows : selected)
         let count: String
         if isSearchingArchive, let archive = location.archive {
             count = "\(rows.count) \(rows.count == 1 ? "match" : "matches") in \(archive.url.lastPathComponent)"
         } else { count = query.isEmpty ? "\(rows.count) items" : "\(rows.count) of \(allRows.count) items" }
         status.summary = count + (location.archive?.canModify == false ? "  ·  Read only" : "") +
-            (selected.isEmpty ? "" : "  ·  Selected \(selected.count) items  ·  \(UIFormat.bytes(total))")
+            (selected.isEmpty ? "  ·  \(UIFormat.bytes(total))" : "  ·  Selected \(selected.count) items  ·  \(UIFormat.bytes(total))")
+        status.context = location.archive?.listing.format.uppercased() ?? ""
         owner?.window?.toolbar?.validateVisibleItems()
+        owner?.browserLayout?.refresh()
     }
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
@@ -301,8 +376,8 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
             let identifier = NSUserInterfaceItemIdentifier("name-cell")
             let cell = table.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView ?? makeNameCell(identifier)
             cell.textField?.stringValue = (item.member?.isEncrypted == true ? "🔒 " : "") + item.name
-            cell.imageView?.image = item.url.map { NSWorkspace.shared.icon(forFile: $0.path) } ??
-                NSImage(systemSymbolName: item.isDirectory ? "folder.fill" : "doc", accessibilityDescription: nil)
+            cell.imageView?.image = NSImage(systemSymbolName: item.symbol, accessibilityDescription: item.type)
+            cell.imageView?.contentTintColor = item.isDirectory ? .systemBlue : (item.symbol == "archivebox.fill" ? .systemOrange : .secondaryLabelColor)
             cell.toolTip = item.path; return cell
         }
         let identifier = NSUserInterfaceItemIdentifier("text-" + id)
@@ -339,7 +414,51 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         ])
         return cell
     }
-    func tableViewSelectionDidChange(_ notification: Notification) { updateStatus() }
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        guard !syncingSelection else { return }
+        syncingSelection = true
+        let selection = Set(table.selectedRowIndexes.map { IndexPath(item: $0, section: 0) })
+        if collection.selectionIndexPaths != selection { collection.selectionIndexPaths = selection }
+        syncingSelection = false
+        updateStatus()
+    }
+    func focusFiles() { view.window?.makeFirstResponder(viewStyle == .icons ? collection : table) }
+    func setViewStyle(_ style: BrowserViewStyle, focus: Bool = true) {
+        viewStyle = style; UserDefaults.standard.set(style.rawValue, forKey: "browserViewStyle")
+        table.headerView = style == .list ? nil : detailsHeader
+        let visible = Set(UserDefaults.standard.stringArray(forKey: "visibleBrowserColumns") ?? ["name", "size", "packed", "modified"])
+        for column in table.tableColumns {
+            let id = column.identifier.rawValue
+            column.isHidden = id == "name" ? false : (style == .list || (id == "location" ? !isSearchingArchive : !visible.contains(id)))
+        }
+        updateEmptyState()
+        if focus { focusFiles() }
+    }
+    func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int { rows.count }
+    func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
+        let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("file"), for: indexPath) as! FileGridItem
+        item.configure(rows[indexPath.item]); return item
+    }
+    func collectionView(_ collectionView: NSCollectionView, didSelectItemsAt indexPaths: Set<IndexPath>) { syncGridSelection() }
+    func collectionView(_ collectionView: NSCollectionView, didDeselectItemsAt indexPaths: Set<IndexPath>) { syncGridSelection() }
+    private func syncGridSelection() {
+        guard !syncingSelection else { return }
+        let selected = IndexSet(collection.selectionIndexPaths.map(\.item))
+        if selected != table.selectedRowIndexes { table.selectRowIndexes(selected, byExtendingSelection: false) }
+    }
+    func collectionView(_ collectionView: NSCollectionView, pasteboardWriterForItemAt indexPath: IndexPath) -> NSPasteboardWriting? {
+        tableView(table, pasteboardWriterForRow: indexPath.item)
+    }
+    func collectionView(_ collectionView: NSCollectionView, validateDrop draggingInfo: NSDraggingInfo,
+                        proposedIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>, dropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
+        guard owner?.canAcceptCommands == true, !location.isEmpty, location.archive?.canModify != false,
+              draggingInfo.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else { return [] }
+        return .copy
+    }
+    func collectionView(_ collectionView: NSCollectionView, acceptDrop draggingInfo: NSDraggingInfo, indexPath: IndexPath,
+                        dropOperation: NSCollectionView.DropOperation) -> Bool {
+        tableView(table, acceptDrop: draggingInfo, row: -1, dropOperation: .above)
+    }
     func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) { applyFilter() }
     @objc func searchChanged() { applyFilter() }
     func controlTextDidChange(_ obj: Notification) { if obj.object as? NSSearchField === search { applyFilter() } }
@@ -389,11 +508,14 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     private func handleKey(_ event: NSEvent) -> Bool {
         guard owner?.isBusy != true, !location.isEmpty else { return false }
         if event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
+            let macKeys = UserDefaults.standard.string(forKey: "keyMode") == "mac"
+            if macKeys && [120, 99, 96, 97, 98, 100, 101].contains(event.keyCode) { return false }
             switch event.keyCode {
             case 36, 76: owner?.openAsArchive(nil)
             case 49: owner?.previewSelected(nil)
-            case 51: goUp()
-            case 48: return false
+            case 51: if macKeys { owner?.deleteSelected(nil) } else { goUp() }
+            case 48: if owner?.usesTwoPanes == true { owner?.switchPane() } else { return false }
+            case 101: owner?.toggleTwoPanels(nil)
             case 120: owner?.renameSelected(nil)
             case 99: owner?.previewSelected(nil)
             case 96: owner?.copyTo(nil)

@@ -70,6 +70,17 @@ struct BrowserRow {
     let packedSize: UInt64?
     let modified: String
     var identity: String { member?.index.map { "entry:\($0)" } ?? path }
+    var symbol: String {
+        if isLink { return "link" }
+        if isDirectory { return "folder.fill" }
+        switch (name as NSString).pathExtension.lowercased() {
+        case "7z", "zip", "rar", "tar", "gz", "bz2", "xz", "wim", "dmg", "iso": return "archivebox.fill"
+        case "png", "jpg", "jpeg", "gif", "heic", "tiff", "webp": return "photo"
+        case "txt", "md", "rtf", "log": return "doc.text"
+        case "pdf": return "doc.richtext"
+        default: return "doc"
+        }
+    }
     var type: String {
         if isLink { return "Link" }
         if isDirectory { return "Folder" }
@@ -90,6 +101,12 @@ struct BrowserRow {
 }
 
 enum UIFormat {
+    static func totalSize(_ rows: [BrowserRow]) -> UInt64 {
+        rows.reduce(UInt64(0)) { sum, row in
+            let (next, overflow) = sum.addingReportingOverflow(row.size ?? 0)
+            return overflow ? UInt64.max : next
+        }
+    }
     static let date: DateFormatter = {
         let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"; return formatter
     }()
@@ -184,15 +201,19 @@ final class PathInput: NSView {
 
 final class FormView: NSView {
     override var isFlipped: Bool { true }
-    private var count = 0
-    init() { super.init(frame: NSRect(x: 0, y: 0, width: 585, height: 0)) }
+    private var nextY: CGFloat = 0
+    private let labelWidth: CGFloat
+    init(width: CGFloat = 585, labelWidth: CGFloat = 142) {
+        self.labelWidth = labelWidth
+        super.init(frame: NSRect(x: 0, y: 0, width: width, height: 0))
+    }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
-    func row(_ title: String, _ control: NSView) {
-        let y = CGFloat(count) * 34
+    func row(_ title: String, _ control: NSView, height: CGFloat = 34) {
+        let y = nextY
         let label = NSTextField(labelWithString: title)
-        label.alignment = .right; label.frame = NSRect(x: 0, y: y + 5, width: 142, height: 22)
-        control.frame = NSRect(x: 154, y: y, width: 430, height: 28)
-        addSubview(label); addSubview(control); count += 1; frame.size.height = CGFloat(count) * 34
+        label.alignment = .right; label.frame = NSRect(x: 0, y: y + 5, width: labelWidth, height: 22)
+        control.frame = NSRect(x: labelWidth + 12, y: y, width: frame.width - labelWidth - 13, height: height - 6)
+        addSubview(label); addSubview(control); nextY += height; frame.size.height = nextY
     }
 }
 

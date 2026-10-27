@@ -1,4 +1,4 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.2
 import PackageDescription
 import Foundation
 
@@ -6,7 +6,7 @@ let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
 
 let package = Package(
     name: "VibeZip",
-    platforms: [.macOS(.v13)],
+    platforms: [.macOS(.v26)],
     products: [
         .library(name: "VibeZipCore", targets: ["VibeZipCore"]),
         .executable(name: "VibeZip", targets: ["VibeZip"])
@@ -20,6 +20,6 @@ let package = Package(
             linkerSettings: [.linkedFramework("AppKit", .when(platforms: [.macOS]))]),
         .testTarget(name: "VibeZipCoreTests", dependencies: ["VibeZipCore"])
     ],
-    swiftLanguageVersions: [.v5],
+    swiftLanguageModes: [.v5],
     cxxLanguageStandard: .cxx17
 )

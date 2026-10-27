@@ -1,16 +1,18 @@
 # VibeZip
 
 Build a native macOS archive manager in this 7-Zip fork, with the familiar
-single-pane workflow of 7-Zip File Manager. The goal is reliable browsing and
+workflow of 7-Zip File Manager and the supplied Sevenfold design. The goal is reliable browsing and
 editing of large, complex and nested archives, distributed through the Mac App
 Store. App Sandbox and explicit file access are part of the architecture;
 store signing and submission remain release work.
 
 ## Design philosophy
 
-- Keep the English interface compact and native. Use one file list, editable
-  breadcrumbs and search at the right. Prefer familiar AppKit controls and clear
-  labels over decorative UI or extra modes.
+- Follow the complete Sevenfold layout in `design_reference/Sevenfold`: one or
+  two file panes, Icons/List/Details, sidebar, editable breadcrumbs, toolbar
+  filter and Info inspector. The user approved macOS 26 as the minimum. Keep
+  real operations and sandbox permissions behind every shipped control; do not
+  substitute the prototype's sample library or simulated results.
 - Use the 7-Zip library in-process through persistent sessions and typed APIs.
   Stream contents; preserve native item identity; verify staged archive changes
   before committing them. Avoid command-line wrappers.

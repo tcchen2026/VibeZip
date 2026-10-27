@@ -2,6 +2,44 @@
 import AppKit
 import VibeZipCore
 
+/// Shared form presentation from the Sevenfold design, using the existing native controls.
+private final class FormDialog: NSObject, NSWindowDelegate {
+    let window: NSPanel
+    init(title: String, subtitle: String, symbol: String, content: NSView, action: String) {
+        let width = max(520, content.frame.width + 40)
+        window = NSPanel(contentRect: NSRect(x: 0, y: 0, width: width, height: content.frame.height + 150),
+            styleMask: [.titled, .closable], backing: .buffered, defer: false)
+        super.init()
+        window.title = title; window.isReleasedWhenClosed = false; window.delegate = self
+        let heading = NSTextField(labelWithString: title); heading.font = .systemFont(ofSize: 18, weight: .semibold)
+        let detail = NSTextField(wrappingLabelWithString: subtitle); detail.textColor = .secondaryLabelColor
+        let labels = NSStackView(views: [heading, detail]); labels.orientation = .vertical; labels.alignment = .leading; labels.spacing = 4
+        let icon = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: nil)!)
+        icon.symbolConfiguration = .init(pointSize: 28, weight: .regular); icon.contentTintColor = .controlAccentColor
+        let header = NSStackView(views: [icon, labels]); header.spacing = 14; header.alignment = .centerY
+        let cancel = NSButton(title: "Cancel", target: self, action: #selector(cancelDialog)); cancel.bezelStyle = .rounded; cancel.keyEquivalent = "\u{1b}"
+        let accept = NSButton(title: action, target: self, action: #selector(acceptDialog)); accept.bezelStyle = .rounded; accept.keyEquivalent = "\r"
+        let footer = NSStackView(views: [cancel, accept]); footer.spacing = 8
+        let root = window.contentView!
+        for child in [header, content, footer] { child.translatesAutoresizingMaskIntoConstraints = false; root.addSubview(child) }
+        NSLayoutConstraint.activate([
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20), header.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            header.topAnchor.constraint(equalTo: root.topAnchor, constant: 20),
+            content.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20), content.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            content.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 20), content.heightAnchor.constraint(equalToConstant: content.frame.height),
+            footer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20), footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18)
+        ])
+    }
+    func run() -> Bool {
+        window.center(); window.makeKeyAndOrderFront(nil)
+        defer { window.orderOut(nil) }
+        return NSApp.runModal(for: window) == .OK
+    }
+    @objc private func acceptDialog() { NSApp.stopModal(withCode: .OK) }
+    @objc private func cancelDialog() { NSApp.stopModal(withCode: .cancel) }
+    func windowShouldClose(_ sender: NSWindow) -> Bool { cancelDialog(); return false }
+}
+
 final class CompressionDialog: NSObject {
     private let path: PathInput
     private let format = NSPopUpButton()
@@ -44,16 +82,25 @@ final class CompressionDialog: NSObject {
         password.isEnabled = encrypted; confirmation.isEnabled = encrypted
     }
     func run(count: Int) -> (URL, CompressionOptions)? {
-        let alert = NSAlert(); alert.messageText = "Add to Archive"
-        alert.informativeText = "\(count) items selected."
-        let form = FormView()
-        form.row("Archive", path); form.row("Archive format", format); form.row("Compression level", level)
-        form.row("Compression method", method); form.row("Dictionary size", dictionary); form.row("CPU threads", threads)
-        form.row("Solid compression", solid); form.row("Password", password); form.row("Confirm password", confirmation)
-        form.row("File name encryption", headers); form.row("ZIP encryption", aes); form.row("Split into volumes", volume)
-        form.row("Verification", verify)
-        alert.accessoryView = form; alert.addButton(withTitle: "Compress"); alert.addButton(withTitle: "Cancel")
-        while alert.runModal() == .alertFirstButtonReturn {
+        let form = NSView(frame: NSRect(x: 0, y: 0, width: 860, height: 344))
+        let archive = FormView(width: 860, labelWidth: 70); archive.row("Archive", path)
+        archive.frame.origin = NSPoint(x: 0, y: 310); form.addSubview(archive)
+        let compression = FormView(width: 396, labelWidth: 135)
+        compression.row("Archive format", format); compression.row("Compression level", level)
+        compression.row("Method", method); compression.row("Dictionary size", dictionary)
+        compression.row("CPU threads", threads); compression.row("", solid)
+        let options = FormView(width: 396, labelWidth: 120)
+        options.row("Password", password); options.row("Confirm password", confirmation)
+        options.row("", headers); options.row("", aes)
+        options.row("Split into volumes", volume); options.row("", verify)
+        for (title, body, x) in [("Compression", compression, CGFloat(0)), ("Encryption and Options", options, CGFloat(440))] {
+            let group = NSBox(frame: NSRect(x: x, y: 10, width: 420, height: 278)); group.title = title
+            body.frame.origin = NSPoint(x: 10, y: 20); group.contentView?.addSubview(body); form.addSubview(group)
+        }
+        let dialog = FormDialog(title: "Add to Archive", subtitle: "Compress \(count) selected items into a new archive.",
+            symbol: "archivebox", content: form, action: "Add")
+        dialog.window.initialFirstResponder = path.field
+        while dialog.run() {
             do {
                 guard !path.field.stringValue.trimmingCharacters(in: .whitespaces).isEmpty else { throw FMError.message("Enter an output archive path.") }
                 guard !password.isEnabled || password.stringValue == confirmation.stringValue else { throw FMError.message("The passwords do not match.") }
@@ -84,8 +131,6 @@ struct ExtractionRequest {
 
 enum Dialogs {
     static func extraction(archive: ArchiveContext, prefix: String, suggested: URL) -> ExtractionRequest? {
-        let alert = NSAlert(); alert.messageText = "Extract files"
-        alert.informativeText = "\(archive.url.lastPathComponent)\nChoose a destination for the selected files."
         let form = FormView(); let path = PathInput(path: suggested.path, saving: false)
         let layout = NSPopUpButton(); layout.addItems(withTitles: ["Full paths", "Relative to current folder", "No paths (files only)"])
         let conflicts = NSPopUpButton(); conflicts.addItems(withTitles: ConflictPolicy.allCases.map(\.title))
@@ -93,8 +138,10 @@ enum Dialogs {
         let reveal = NSButton(checkboxWithTitle: "Reveal destination in Finder", target: nil, action: nil); reveal.state = .off
         form.row("Extract to", path); form.row("Path mode", layout); form.row("Existing files", conflicts)
         form.row("Password (if needed)", password); form.row("After extraction", reveal)
-        alert.accessoryView = form; alert.addButton(withTitle: "Extract"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let dialog = FormDialog(title: "Extract Files", subtitle: "Choose where to extract items from “\(archive.url.lastPathComponent)”.",
+            symbol: "square.and.arrow.up.on.square", content: form, action: "Extract")
+        dialog.window.initialFirstResponder = path.field
+        guard dialog.run() else { return nil }
         return ExtractionRequest(destination: path.url,
             layout: layout.indexOfSelectedItem == 0 ? .fullPaths : (layout.indexOfSelectedItem == 1 ? .relativeTo(prefix) : .flat),
             policy: ConflictPolicy(rawValue: conflicts.indexOfSelectedItem) ?? .rename,
@@ -102,19 +149,18 @@ enum Dialogs {
     }
 
     static func destination(title: String, suggested: URL) -> (URL, ConflictPolicy)? {
-        let alert = NSAlert(); alert.messageText = title
         let form = FormView(); let path = PathInput(path: suggested.path, saving: false)
         let conflicts = NSPopUpButton(); conflicts.addItems(withTitles: ConflictPolicy.allCases.map(\.title))
         form.row("Destination", path); form.row("Existing files", conflicts)
-        alert.accessoryView = form; alert.addButton(withTitle: "Continue"); alert.addButton(withTitle: "Cancel")
-        guard alert.runModal() == .alertFirstButtonReturn else { return nil }
+        let dialog = FormDialog(title: title, subtitle: "Choose a destination and how to handle existing files.",
+            symbol: "folder", content: form, action: "Continue")
+        dialog.window.initialFirstResponder = path.field
+        guard dialog.run() else { return nil }
         return (path.url, ConflictPolicy(rawValue: conflicts.indexOfSelectedItem) ?? .rename)
     }
 
-    static func preferences() -> Bool {
+    static func preferences(folderAccess: Bool = false) -> Bool {
         let defaults = UserDefaults.standard
-        let alert = NSAlert(); alert.messageText = "VibeZip Settings"
-        alert.informativeText = "Passwords are remembered only until you quit or clear them."
         let form = FormView()
         let backups = NSButton(checkboxWithTitle: "Keep a backup before updating an archive", target: nil, action: nil)
         backups.state = defaults.bool(forKey: "keepBackups") ? .on : .off
@@ -122,18 +168,39 @@ enum Dialogs {
         hidden.state = defaults.bool(forKey: "showHidden") ? .on : .off
         let cap = NSTextField(string: String(defaults.integer(forKey: "extractionLimitGiB")))
         form.row("Archive backups", backups); form.row("Hidden items", hidden); form.row("Extraction limit (GiB)", cap)
+        let tips = NSButton(checkboxWithTitle: "Show keyboard tips above the file list", target: nil, action: nil)
+        tips.state = defaults.bool(forKey: "showKeyTips") ? .on : .off
+        let keyboard = FormView()
+        let keyMode = NSSegmentedControl(labels: ["7-Zip", "Mac"], trackingMode: .selectOne, target: nil, action: nil)
+        keyMode.selectedSegment = defaults.string(forKey: "keyMode") == "mac" ? 1 : 0
+        keyboard.row("Key bindings", keyMode); keyboard.row("Key tips", tips)
+        let explanation = NSTextField(wrappingLabelWithString: "7-Zip mode uses function keys for file actions. Mac mode uses ⌘Y to preview and Delete to move files to Trash. Help → Shortcut Map lists every supported shortcut.")
+        explanation.textColor = .secondaryLabelColor
+        keyboard.row("", explanation, height: 72)
         let folders = FolderAccessView()
-        let content = NSView(frame: NSRect(x: 0, y: 0, width: 585, height: form.frame.height + folders.frame.height + 16))
-        folders.frame.origin = .zero; form.frame.origin = NSPoint(x: 0, y: folders.frame.height + 16)
-        content.addSubview(form); content.addSubview(folders)
-        alert.accessoryView = content; alert.addButton(withTitle: "Save"); alert.addButton(withTitle: "Cancel")
-        while alert.runModal() == .alertFirstButtonReturn {
+        let content = NSTabView(frame: NSRect(x: 0, y: 0, width: 625, height: 320))
+        for (title, body) in [("General", form as NSView), ("Folder Access", folders as NSView), ("Keyboard", keyboard as NSView)] {
+            let tab = NSTabViewItem(identifier: title); tab.label = title
+            let container = NSView(); body.translatesAutoresizingMaskIntoConstraints = false; container.addSubview(body)
+            NSLayoutConstraint.activate([
+                body.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 16),
+                body.topAnchor.constraint(equalTo: container.topAnchor, constant: 16),
+                body.widthAnchor.constraint(equalToConstant: 585), body.heightAnchor.constraint(equalToConstant: body.frame.height)
+            ])
+            tab.view = container; content.addTabViewItem(tab)
+        }
+        if folderAccess { content.selectTabViewItem(at: 1) }
+        let dialog = FormDialog(title: "Settings", subtitle: "Manage browsing, archive options and access to your folders.",
+            symbol: "gearshape", content: content, action: "Save")
+        while dialog.run() {
             guard let value = Int(cap.stringValue), (1...100_000).contains(value) else {
                 UIFormat.error(FMError.message("The extraction limit must be between 1 and 100,000 GiB.")); continue
             }
             defaults.set(backups.state == .on, forKey: "keepBackups")
             defaults.set(hidden.state == .on, forKey: "showHidden")
             defaults.set(value, forKey: "extractionLimitGiB")
+            defaults.set(tips.state == .on, forKey: "showKeyTips")
+            defaults.set(keyMode.selectedSegment == 1 ? "mac" : "7z", forKey: "keyMode")
             return true
         }
         return false

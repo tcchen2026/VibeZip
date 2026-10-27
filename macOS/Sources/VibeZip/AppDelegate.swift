@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var pendingURLs: [URL] = []
     func applicationDidFinishLaunching(_ notification: Notification) {
         UserDefaults.standard.register(defaults: ["showHidden": false, "keepBackups": true,
-            "extractionLimitGiB": 100])
+            "extractionLimitGiB": 100, "showKeyTips": true, "browserViewStyle": BrowserViewStyle.details.rawValue])
         do {
             let engine = try Engine(libraryURL: Engine.locate())
             let controller = MainWindowController(service: ArchiveService(engine: engine))
@@ -80,7 +80,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         edit.addItem(c.menuItem("Rename…  F2", #selector(c.renameSelected)))
         edit.addItem(c.menuItem("Delete / Move to Trash…", #selector(c.deleteSelected), key: "\u{8}"))
         let view = submenu("View")
-        view.addItem(c.menuItem("Preview  Space / F3", #selector(c.previewSelected)))
+        view.addItem(c.menuItem("Show Sidebar", #selector(c.togglePlaces), key: "s", modifiers: [.command, .control]))
+        view.addItem(c.menuItem("Show Key Tips", #selector(c.toggleKeyTips)))
+        view.addItem(c.menuItem("2 Panels  F9", #selector(c.toggleTwoPanels)))
+        view.addItem(.separator())
+        for (index, title) in ["Icons", "List", "Details"].enumerated() {
+            let item = c.menuItem(title, #selector(c.changeViewStyle), key: String(index + 1)); item.tag = index; view.addItem(item)
+        }
+        view.addItem(.separator())
+        view.addItem(c.menuItem("Preview  Space / F3", #selector(c.previewSelected), key: "y"))
         view.addItem(c.menuItem("Info", #selector(c.properties), key: "i"))
         view.addItem(c.menuItem("Reveal in Finder", #selector(c.revealInFinder), key: "r", modifiers: [.command, .shift]))
         view.addItem(c.menuItem("Show Hidden Files", #selector(c.toggleHidden), key: ".", modifiers: [.command, .shift]))
@@ -104,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windows.addItem(withTitle: "Bring All to Front", action: #selector(NSApplication.arrangeInFront(_:)), keyEquivalent: "")
         let help = submenu("Help"); help.addItem(c.menuItem("VibeZip Help", #selector(c.showHelp))); NSApp.helpMenu = help
         help.addItem(c.menuItem("Privacy", #selector(c.showPrivacyPolicy)))
+        help.addItem(c.menuItem("Shortcut Map", #selector(c.showShortcuts)))
     }
 }
 #endif

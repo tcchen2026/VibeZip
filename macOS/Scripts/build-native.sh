@@ -15,7 +15,7 @@ if [ ! -f "$VIBEZIP_DEST/headers.sha256" ] || [ "$(cat "$VIBEZIP_DEST/headers.sh
 fi
 if [ "$(uname -s)" = Darwin ]; then
     case "$VIBEZIP_ARCH" in arm64) VIBEZIP_MAKE_ARCH=arm64;; x86_64) VIBEZIP_MAKE_ARCH=x64;; *) exit 2;; esac
-    export MACOSX_DEPLOYMENT_TARGET=13.0
+    export MACOSX_DEPLOYMENT_TARGET=26.0
     export SDKROOT="$(xcrun --sdk macosx --show-sdk-path)"
     make -C "$VIBEZIP_BUNDLE" "${VIBEZIP_MAKE_FLAGS[@]}" -f "../../cmpl_mac_$VIBEZIP_MAKE_ARCH.mak"
     cp "$VIBEZIP_BUNDLE/b/m_$VIBEZIP_MAKE_ARCH/7z.so" "$VIBEZIP_DEST/libVibeZip7z.dylib"

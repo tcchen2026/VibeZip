@@ -7,7 +7,7 @@ document interface changes at the Swift/C++ boundary.
 
 ## Build entry points
 
-On macOS 13 or later with Xcode command-line tools and Swift 5.9 or later:
+On macOS 26 or later with Xcode command-line tools and Swift 6.2 or later:
 
 ```sh
 cd macOS

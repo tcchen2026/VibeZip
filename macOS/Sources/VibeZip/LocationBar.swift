@@ -32,6 +32,13 @@ final class LocationBar: NSView, NSTextFieldDelegate {
 
     init() {
         super.init(frame: .zero)
+        let glass = NSGlassEffectView(); glass.cornerRadius = 16
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        let content = NSView(); glass.contentView = content; addSubview(glass)
+        NSLayoutConstraint.activate([
+            glass.leadingAnchor.constraint(equalTo: leadingAnchor), glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor), glass.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
         setContentHuggingPriority(.defaultLow, for: .horizontal)
         setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         breadcrumbs.pathStyle = .standard; breadcrumbs.backgroundColor = .clear
@@ -41,7 +48,8 @@ final class LocationBar: NSView, NSTextFieldDelegate {
         breadcrumbs.setAccessibilityLabel("Location")
         breadcrumbs.setAccessibilityHelp("Click or press Command-L to edit the path.")
         breadcrumbs.onEdit = { [weak self] in self?.beginEditing() }
-        editor.font = .systemFont(ofSize: 13); editor.bezelStyle = .roundedBezel
+        editor.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
+        editor.isBordered = false; editor.drawsBackground = false; editor.focusRingType = .none
         editor.isEditable = true; editor.isSelectable = true; editor.isEnabled = true
         editor.placeholderString = "Enter a folder or archive path"
         editor.setAccessibilityLabel("Location")
@@ -51,9 +59,9 @@ final class LocationBar: NSView, NSTextFieldDelegate {
         for control in [breadcrumbs as NSControl, editor] {
             control.translatesAutoresizingMaskIntoConstraints = false
             control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-            addSubview(control)
+            content.addSubview(control)
             NSLayoutConstraint.activate([
-                control.leadingAnchor.constraint(equalTo: leadingAnchor), control.trailingAnchor.constraint(equalTo: trailingAnchor),
+                control.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10), control.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
                 control.centerYAnchor.constraint(equalTo: centerYAnchor),
                 control.heightAnchor.constraint(equalToConstant: 26)
             ])

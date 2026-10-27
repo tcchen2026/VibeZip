@@ -8,6 +8,8 @@ final class OperationStatusView: NSView {
     let progress = NSProgressIndicator()
     let cancel = NSButton(title: "Cancel", target: nil, action: nil)
     let details = NSButton(title: "Details…", target: nil, action: nil)
+    private let contextLabel = NSTextField(labelWithString: "")
+    var context = "" { didSet { contextLabel.stringValue = context; contextLabel.isHidden = context.isEmpty || token != nil || hasNotice } }
     var onDetails: (() -> Void)?
     var onCancel: (() -> Void)?
     private(set) var currentProgress: ArchiveProgress?
@@ -28,7 +30,9 @@ final class OperationStatusView: NSView {
         }
         cancel.action = #selector(cancelJob); details.action = #selector(showDetails)
         cancel.toolTip = "Cancel the current operation. Completed file copies are kept."
-        let stack = NSStackView(views: [message, progress, details, cancel])
+        contextLabel.font = .systemFont(ofSize: 10, weight: .medium); contextLabel.textColor = .secondaryLabelColor
+        contextLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let stack = NSStackView(views: [message, progress, details, cancel, contextLabel])
         stack.orientation = .horizontal; stack.alignment = .centerY; stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false; addSubview(stack)
         NSLayoutConstraint.activate([
@@ -71,6 +75,7 @@ final class OperationStatusView: NSView {
         revision = UUID(); hasNotice = false; details.isHidden = true; display(summary)
     }
     private func display(_ text: String, error: Bool = false) {
+        contextLabel.isHidden = context.isEmpty || token != nil || hasNotice
         message.stringValue = text.components(separatedBy: .newlines).joined(separator: " ")
         message.toolTip = text; message.textColor = error ? .systemRed : .secondaryLabelColor
     }

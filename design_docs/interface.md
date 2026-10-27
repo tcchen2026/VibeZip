@@ -1,19 +1,41 @@
 # Interface and interaction
 
 The interface should feel like a compact macOS file manager. English is the
-default language. A single file list carries both filesystem browsing and archive
-browsing, including nested archives. Prefer native AppKit controls, readable
+default language. One or two file panes carry filesystem and archive browsing, including nested
+archives. The active pane owns command targets, filter text and the Info selection. Prefer native AppKit controls, readable
 rows and familiar actions over decorative panels or new navigation modes.
 
 ## Window layout
 
-The default arrangement has three working areas:
+The layout adapts the supplied Sevenfold SwiftUI design to VibeZip's real,
+browser, including the prototype's optional second pane. It remains compatible with macOS 26 and later; native
+materials follow the running system's appearance.
 
-1. A native toolbar: icon-only Back, Forward and Up at the left; compact archive
-   and file actions, including Preview and Info, grouped to the right.
-2. A location row: breadcrumbs use the available width; the search field stays
-   at the far right with a fixed width. There is no separate **File System** label.
-3. A sortable file table with a compact status area below it.
+The default arrangement has these working areas:
+
+1. A collapsible sidebar: Favorites are actual saved folder grants, followed by
+   open archives and recent folders from the current session. Add Folder uses
+   the existing system permission picker. Unavailable grants remain visible.
+2. A native toolbar: Sidebar, Back and Forward at the left; Add, Extract and Test
+   grouped separately from Copy, Move, Delete, Preview and Info.
+3. A dismissible shortcut strip and rounded breadcrumb location row. Up and
+   Folders History sit beside each path; the toolbar filter follows the active pane.
+4. Icons, List or a sortable inset Details table in each pane and a fixed-height status area showing counts,
+   sizes, archive format and operation feedback.
+5. An optional Info inspector showing the current selection and archive's live
+   metadata. Command-I toggles it without opening a separate window.
+
+Sidebar, inspector, two-pane mode and key-tip visibility are saved locally.
+F9 toggles two panes in 7-Zip keyboard mode; Tab changes the active pane. Each
+pane keeps its own path, history, filter, view style and selection. Both panes
+refresh after archive mutations, and each permission check uses the same shared
+DirectoryAccessStore. Copy/Move offers the other pane's filesystem folder as its
+default destination. Switching panes during an active operation is disabled so
+completion and cancellation remain attached to the initiating pane.
+View can restore hidden areas; Help → Shortcut Map lists the implemented keys.
+Empty folders and searches have distinct empty states. The prototype's sample
+files, simulated operations, external viewers and unimplemented
+Finder integration are not part of this adaptation.
 
 Use consistent toolbar spacing and vertically center every table cell's text
 and icon, including metadata columns and the Folder Access table. The property
@@ -27,6 +49,7 @@ rules. Back and Forward traverse navigation history; Up moves toward a parent
 directory or out of the current archive context.
 
 Sources: [MainWindowController.swift](../macOS/Sources/VibeZip/MainWindowController.swift),
+[BrowserChrome.swift](../macOS/Sources/VibeZip/BrowserChrome.swift),
 [PaneController.swift](../macOS/Sources/VibeZip/PaneController.swift),
 [LocationBar.swift](../macOS/Sources/VibeZip/LocationBar.swift).
 
@@ -99,7 +122,8 @@ The threshold and UI implementation are in
 ## First launch and About
 
 Without a restorable authorized directory, show **Choose a folder to get started**
-and a **Choose Folder…** button. A later launch restores the last available
+and a **Choose Folder…** button. Sidebar Favorites starts empty until access is
+granted; displaying a place never grants permission. A later launch restores the last available
 authorized directory. Settings exposes saved grants so users can understand and
 change the app's access.
 
@@ -111,3 +135,12 @@ Keep licensing detail in the bundled notices and source documentation. Maintain
 keyboard focus, accessibility labels and adequate contrast when changing custom
 controls. Visual layout review is manual; do not add screenshot test machinery
 for routine spacing changes.
+
+## Settings and shortcuts
+
+Settings uses General, Folder Access and Keyboard tabs. The sidebar and shortcut
+map also select 7-Zip or Mac key mode. 7-Zip mode enables F2–F9 and Backspace
+for Up; Mac mode uses Delete for Trash and Command-Up for Up. Space and Command-Y
+preview in both modes. Shortcut Map has a filter, a side-by-side key comparison
+and a What Moved tab. Compression, extraction and transfer forms share the
+design's symbol, heading and footer layout while retaining real option validation.
