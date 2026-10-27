@@ -1,0 +1,26 @@
+{
+  "archive": "Sevenfold-SwiftUI(1).zip",
+  "sha256": "e3fe114d0b9179f87ec0861e2f72da4fe08772b8a405856060707a25113f5e15",
+  "files": {
+    "Sevenfold/Sources/Sevenfold/State/OperationModel.swift": "5613c39476ae54aff38579a9a925e9c403da58dffb50b0fa5e26ccf5f8fcbc6b",
+    "Sevenfold/Sources/Sevenfold/State/PaneState.swift": "af8f15cf2774034c410052cc939d4f05cd30edd5a7fc1549bc4784924afc8f88",
+    "Sevenfold/Sources/Sevenfold/State/BrowserModel.swift": "77367252dfcdb70b5c36fd1023bbca079e6127d2b8d22d8185d6f774a63e59ed",
+    "Sevenfold/Sources/Sevenfold/Views/SidebarView.swift": "479632be81c79f4b25bc69a714753301a36314517e03e59b8eec90ed53ba4149",
+    "Sevenfold/Sources/Sevenfold/Views/SettingsView.swift": "7de8ae9368b5878d11a11b0633f47b9f47f31cfca7696a0967c039210078bc0a",
+    "Sevenfold/Sources/Sevenfold/Views/FileBrowser.swift": "fb8d1bf3a775124bfb690aa58e1e233fb04a6cb198181fbd2db2938bb865572c",
+    "Sevenfold/Sources/Sevenfold/Views/ShortcutMapView.swift": "3b6ef75a7f9075cb927236517915c62d68d8602cbd7218aad7d42d22fefde662",
+    "Sevenfold/Sources/Sevenfold/Views/ArchiveSheets.swift": "8c987532988ef807b63b92b5b59c28c2e10b96047ea8e52748a589f95695db45",
+    "Sevenfold/Sources/Sevenfold/Views/BenchmarkView.swift": "d6decda819e366d17cdc63bfa3364932ef8050bcf21464620c3c80099ffb0f27",
+    "Sevenfold/Sources/Sevenfold/Views/UtilitySheets.swift": "f69904a7b344140de5cc97e0a0af1105da9c77c7041da3b88aaa2b1a5ab4d155",
+    "Sevenfold/Sources/Sevenfold/Views/InspectorView.swift": "1daecf97d46d1cfd9e8203e12504d4661110e20b9b83bd4294c0b52cc8fcea7f",
+    "Sevenfold/Sources/Sevenfold/Views/BrowserWindow.swift": "baf2d9dbdd2cf21e614c5c5a1dc2a82c131d7a1934c8b100991828490cde0a6a",
+    "Sevenfold/Sources/Sevenfold/Model/Formatting.swift": "9de634ed05370934196ffe103234a539de14dd90171388a5ad96a403f02b0c67",
+    "Sevenfold/Sources/Sevenfold/Model/Archive.swift": "ab2e81b2a1b8af9e2908249f634f3355f8c383956c93cb58acaa0ef8d099eadc",
+    "Sevenfold/Sources/Sevenfold/Model/SampleLibrary.swift": "8718c1ba7bccc6a4ee2c359c033ff8525932a7a7f78dd0a56effddf2778cc668",
+    "Sevenfold/Sources/Sevenfold/Model/ArchiveOptions.swift": "5d338a4f5680f9e6a8bc422213e525a1613e2999ca081f245fa68d1cb98599a1",
+    "Sevenfold/Sources/Sevenfold/Model/Commands.swift": "8f0205df19f2f9ae7e6e7c240d058731bd5519c8eedb048511d8b908021227b8",
+    "Sevenfold/Sources/Sevenfold/App/SevenfoldCommands.swift": "d1cde8c35d8ae7b559e7a8a950b8cdafbe8cb7928e3e3139b5c4ea389af05090",
+    "Sevenfold/Sources/Sevenfold/App/SevenfoldApp.swift": "4fe258f6653e302e785b5ca13bc0d2f3f14d936f20508aad9e21516d22db81a2",
+    "Sevenfold/Package.swift": "e673018491ba2aaf544d7e91a42dec28548315fa6a065d5d00273a86b2eb53ed"
+  }
+}
