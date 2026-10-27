@@ -7,7 +7,7 @@ document interface changes at the Swift/C++ boundary.
 
 ## Build entry points
 
-On macOS 26 or later with Xcode command-line tools and Swift 6.2 or later:
+On macOS 26 or later with Xcode 26 and Swift 6.2 or later:
 
 ```sh
 cd macOS
@@ -21,6 +21,8 @@ open dist/VibeZip.app
 | `bash build.sh --universal` | Build arm64 and x86_64 and combine the binaries |
 | `bash build.sh --debug` | Use a debug Swift configuration |
 | `bash build.sh --library-only` | Build just the native engine |
+| `bash Scripts/package-dmg.sh --unsigned` | Build and package a universal local DMG |
+| `bash Scripts/package-dmg.sh` | Build, sign and notarize a universal release DMG using configured credentials |
 | `bash Scripts/test-core.sh` | Build the engine and run core/native tests |
 | `bash Scripts/test-core.sh --filter ZIPFilenameEncodingTests` | Run a focused test suite |
 
@@ -29,7 +31,7 @@ open dist/VibeZip.app
 It fingerprints upstream headers and makefiles to force a rebuild when needed,
 because the upstream makefiles do not track every header dependency.
 [Package.swift](../macOS/Package.swift) defines the C++ bridge, core library and
-AppKit executable targets.
+AppKit/SwiftUI executable targets.
 
 Build scripts keep Swift caches under `macOS/.build/` and use SwiftPM's
 `--disable-sandbox` flag. That flag concerns SwiftPM's build-time sandbox; it does
@@ -62,6 +64,11 @@ packaging changes should check the affected scripts and produced resources.
 
 ## Packaging and licensing material
 
+The [macOS DMG workflow](../.github/workflows/macos.yml) runs only when manually
+dispatched. It builds and packages without running tests or UI automation. See
+[DMG distribution](distribution.md) for the release environment, signing secrets
+and optional publication. App Sandbox stays enabled for direct distribution.
+
 [build.sh](../macOS/build.sh) creates the app in a staging directory and signs the
 engine and app with an ad-hoc identity for local use. It packages the engine,
 resources, privacy declaration, license notices, a corresponding-source archive
@@ -79,10 +86,10 @@ documentation surface.
 
 ## Open release work
 
-Mac App Store distribution is the project goal. The local build script currently
-produces an ad-hoc-signed development bundle, not a store submission artifact.
-Publisher signing, provisioning, release versioning, store metadata and
-submission configuration remain to be supplied.
+Direct DMG distribution is implemented by `Scripts/package-dmg.sh`; publishing
+requires the configured Developer ID and notarization credentials. The regular
+app build remains ad-hoc signed. Mac App Store provisioning, store metadata and
+submission are separate future work; the DMG workflow does not upload to the store.
 
 Before a release, validate the exact distributed build's folder authorization,
 restore and revoke flows, access to multivolume siblings, destination writes and

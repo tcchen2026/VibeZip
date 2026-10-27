@@ -1,12 +1,12 @@
 # VibeZip for macOS
 
-VibeZip is a native, single-pane archive manager with an English AppKit interface.
+VibeZip is a native archive manager with an English AppKit and SwiftUI interface.
 It loads this repository's 7-Zip shared library directly, without a command-line
 helper process.
 
 ## Build
 
-Requires macOS 13 or later, Xcode command-line tools and Swift 5.9 or later.
+Requires macOS 26 or later, Xcode 26 or later with Swift 6.2 or later.
 From this directory:
 
 ```sh
@@ -19,14 +19,33 @@ open dist/VibeZip.app
 Local app bundles use ad-hoc signing and enable App Sandbox. Store distribution
 requires the publisher's signing and App Store configuration.
 
+For a local test DMG, run `bash Scripts/package-dmg.sh --unsigned`. This builds
+both architectures and writes `dist/VibeZip-macOS-unsigned.dmg` plus a checksum.
+The GitHub **macOS DMG** workflow runs manually through **Actions → Run workflow**;
+it never runs on push. With release credentials it signs and notarizes the DMG.
+See [DMG distribution](../design_docs/distribution.md) for secrets and release options.
+
 ## Use
 
 Choose a folder on first launch. Saved security-scoped bookmarks allow the app to
 restore the last authorized directory. Manage access in Settings → Folder Access.
 
-Double-click enters a folder or opens a file as an archive. Back, Forward and Up
-are at the left of the toolbar. Click the breadcrumb address or press Command-L
-to edit it. Search covers the current folder, or all entries in the current
+The Sevenfold-inspired layout has a sidebar of authorized folders, open archives
+and recent folders, a shortcut strip, and an optional Info inspector. Use View
+to toggle the sidebar or key tips, Command-I for Info, and Help → Shortcut Map
+for keyboard shortcuts. Favorites contains your real saved folder grants.
+Toggle **2 Panels** in the toolbar or press F9 for two independent browsers.
+Tab changes the active pane; commands, filter and Info follow it. In two-pane
+mode, Copy/Move suggests the other pane's filesystem folder. The sidebar offers
+7-Zip and Mac keyboard modes.
+
+The toolbar's view switcher selects Icons, List or Details while retaining the
+same selection. Command-1, Command-2 and Command-3 select these views directly.
+
+Double-click enters a folder or opens a file as an archive. Back and Forward
+are at the left of the toolbar; Up and history are beside the rounded path bar.
+Click the breadcrumb address or press Command-L
+to edit it. The toolbar filter covers the active folder, or all entries in the active
 archive. It does not enter nested archives.
 
 Open nested archives directly. Supported changes are verified and written back

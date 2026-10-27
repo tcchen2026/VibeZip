@@ -1,8 +1,7 @@
 # VibeZip design documents
 
 VibeZip is a 7-Zip fork with a native macOS archive manager. Its purpose is to
-make large and nested archives usable through a familiar single-pane file
-manager, with explicit folder authorization and a path to Mac App Store
+make large and nested archives usable through a familiar file manager with one or two browser panes, with explicit folder authorization and a path to Mac App Store
 distribution. The app uses the archive engine directly and defaults to English.
 
 These documents describe the implementation in this repository and the reasons
@@ -18,6 +17,8 @@ target, not a statement that the current build has been submitted or approved.
 | [Interface](interface.md) | Navigation, search, commands, dialogs, progress or visual layout |
 | [ZIP filenames](zip-filenames.md) | Legacy filename decoding or the ZIP handler extension |
 | [Development and release](development.md) | Builds, focused verification, source packaging or release preparation |
+| [DMG distribution](distribution.md) | Manual GitHub Actions builds, signing secrets, notarization and sandbox verification |
+| [Design integration](design-integration.md) | Complete imported reference and the shipping UI's integration status |
 
 The project purpose, design principles and source map are summarized in
 [AGENTS.md](../AGENTS.md). User-facing instructions are in the

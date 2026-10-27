@@ -1,0 +1,130 @@
+name: macOS DMG
+
+# Deliberately manual: pushes, pull requests and tags do not start this workflow.
+on:
+  workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish the signed and notarized DMG as a GitHub release
+        type: boolean
+        default: false
+      prerelease:
+        description: Mark the GitHub release as a pre-release
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-dmg-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: release
+    permissions:
+      contents: write
+    env:
+      HAVE_DEVELOPER_ID: ${{ secrets.MACOS_DEVELOPER_ID_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check release configuration
+        env:
+          PUBLISH_RELEASE: ${{ inputs.publish_release }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          if [ "$PUBLISH_RELEASE" = true ] && [ "$HAVE_DEVELOPER_ID" != true ]; then
+            echo '::error::Publishing requires Developer ID signing and notarization secrets in the release environment.'
+            exit 1
+          fi
+          if [ "$HAVE_DEVELOPER_ID" = true ]; then
+            : "${ASC_KEY_ID:?Missing ASC_KEY_ID}" "${ASC_ISSUER_ID:?Missing ASC_ISSUER_ID}" "${ASC_KEY_P8:?Missing ASC_KEY_P8}"
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: Import signing material
+        if: env.HAVE_DEVELOPER_ID == 'true'
+        env:
+          DEVELOPER_ID_P12: ${{ secrets.MACOS_DEVELOPER_ID_P12 }}
+          DEVELOPER_ID_PASSWORD: ${{ secrets.MACOS_DEVELOPER_ID_PASSWORD }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        run: |
+          VIBEZIP_KEYCHAIN="$RUNNER_TEMP/vibezip-signing.keychain-db"
+          VIBEZIP_KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          security create-keychain -p "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$VIBEZIP_KEYCHAIN"
+          security unlock-keychain -p "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN"
+          umask 077
+          printf '%s' "$DEVELOPER_ID_P12" | base64 --decode > "$RUNNER_TEMP/vibezip-cert.p12"
+          security import "$RUNNER_TEMP/vibezip-cert.p12" -k "$VIBEZIP_KEYCHAIN" -P "$DEVELOPER_ID_PASSWORD" -T /usr/bin/codesign
+          rm -f "$RUNNER_TEMP/vibezip-cert.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN" > /dev/null
+          security list-keychains -d user -s "$VIBEZIP_KEYCHAIN" "$HOME/Library/Keychains/login.keychain-db"
+          VIBEZIP_IDENTITY=$(security find-identity -v -p codesigning "$VIBEZIP_KEYCHAIN" | sed -n 's/.*"\(Developer ID Application: [^"]*\)".*/\1/p' | head -1)
+          [ -n "$VIBEZIP_IDENTITY" ] || { echo '::error::No Developer ID Application identity was imported.'; exit 1; }
+          printf '%s\n' "$ASC_KEY_P8" > "$RUNNER_TEMP/vibezip-notary.p8"
+          printf 'MACOS_DEVELOPER_ID=%s\n' "$VIBEZIP_IDENTITY" >> "$GITHUB_ENV"
+          printf 'MACOS_SIGNING_KEYCHAIN=%s\n' "$VIBEZIP_KEYCHAIN" >> "$GITHUB_ENV"
+          printf 'ASC_KEY_PATH=%s\n' "$RUNNER_TEMP/vibezip-notary.p8" >> "$GITHUB_ENV"
+
+      - name: Build universal app
+        run: bash macOS/build.sh --universal
+
+      - name: Package sandboxed DMG
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          if [ "$HAVE_DEVELOPER_ID" = true ]; then
+            bash macOS/Scripts/package-dmg.sh --skip-build
+          else
+            bash macOS/Scripts/package-dmg.sh --skip-build --unsigned
+          fi
+
+      - name: Keep DMG and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibeZip-macOS-${{ github.sha }}
+          path: |
+            macOS/dist/VibeZip-macOS*.dmg
+            macOS/dist/VibeZip-macOS*.dmg.sha256
+          if-no-files-found: error
+
+      - name: Keep notarization diagnostics
+        if: always() && env.HAVE_DEVELOPER_ID == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibeZip-notarization-${{ github.sha }}
+          path: macOS/dist/notarization*.json
+          if-no-files-found: ignore
+
+      - name: Publish release
+        if: inputs.publish_release && env.HAVE_DEVELOPER_ID == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        run: |
+          VIBEZIP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macOS/Resources/Info.plist)
+          VIBEZIP_TAG="v$VIBEZIP_VERSION-$(git rev-parse --short=12 HEAD)"
+          VIBEZIP_FILES=(macOS/dist/VibeZip-macOS.dmg macOS/dist/VibeZip-macOS.dmg.sha256)
+          if gh release view "$VIBEZIP_TAG" > /dev/null 2>&1; then
+            gh release upload "$VIBEZIP_TAG" "${VIBEZIP_FILES[@]}" --clobber
+          else
+            VIBEZIP_FLAGS=()
+            [ "$PRERELEASE" != true ] || VIBEZIP_FLAGS+=(--prerelease)
+            gh release create "$VIBEZIP_TAG" "${VIBEZIP_FILES[@]}" --target "$GITHUB_SHA" \
+              --title "VibeZip $VIBEZIP_VERSION" --notes-file macOS/RELEASE-NOTES.md "${VIBEZIP_FLAGS[@]}"
+          fi
+
+      - name: Remove signing material
+        if: always() && env.HAVE_DEVELOPER_ID == 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/vibezip-signing.keychain-db" || true
+          rm -f "$RUNNER_TEMP/vibezip-cert.p12" "$RUNNER_TEMP/vibezip-notary.p8"
