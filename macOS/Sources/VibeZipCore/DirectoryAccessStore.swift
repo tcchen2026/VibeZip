@@ -105,12 +105,12 @@ public final class DirectoryAccessStore {
 
     /// Call only with a URL granted by a system file panel or other user selection.
     @discardableResult public func authorize(_ directory: URL, replacing id: UUID? = nil) throws -> URL {
-        guard directory.isFileURL, isDirectory(directory) else { throw FMError.message("Choose an accessible folder.") }
+        guard directory.isFileURL, isDirectory(directory) else { throw FMError.message(L10n.tr("Choose an accessible folder.")) }
         let data = try bookmarks.create(directory)
         let resolved = try bookmarks.resolve(data)
-        guard bookmarks.start(resolved.url) else { throw FMError.message("Folder access could not be saved. Please choose the folder again.") }
+        guard bookmarks.start(resolved.url) else { throw FMError.message(L10n.tr("Folder access could not be saved. Please choose the folder again.")) }
         guard isDirectory(resolved.url) else {
-            bookmarks.stop(resolved.url); throw FMError.message("This folder is currently unavailable.")
+            bookmarks.stop(resolved.url); throw FMError.message(L10n.tr("This folder is currently unavailable."))
         }
         let existing = records.first { $0.id == id } ?? records.first { canonicalPath(active[$0.id] ?? URL(fileURLWithPath: $0.path)) == canonicalPath(resolved.url) }
         let recordID = existing?.id ?? UUID()
@@ -172,7 +172,7 @@ public final class DirectoryAccessStore {
     public func retainSelectedFile(_ file: URL) throws {
         guard !canReadFile(file) else { return }
         let resolved = try bookmarks.resolve(bookmarks.create(file))
-        guard bookmarks.start(resolved.url) else { throw FMError.message("File access could not be retained. Please select the file again.") }
+        guard bookmarks.start(resolved.url) else { throw FMError.message(L10n.tr("File access could not be retained. Please select the file again.")) }
         selectedFiles[canonicalPath(resolved.url)] = resolved.url
     }
     public func close() {

@@ -10,11 +10,11 @@ public enum FMError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .message(let text): return text
-        case .cancelled: return "Operation cancelled."
-        case .passwordRequired(let text): return text.isEmpty ? "A password is required or the password is incorrect." : text
+        case .cancelled: return L10n.tr("Operation cancelled.")
+        case .passwordRequired(let text): return text.isEmpty ? L10n.tr("A password is required or the password is incorrect.") : text
         case .passwordForArchive(_, let text): return text
         case .fileAccessRequired(let text): return text
-        case .engine(let code, let text): return "\(text)\n\n7-Zip error: \(code)"
+        case .engine(let code, let text): return L10n.tr("\(text)\n\n7-Zip error: \(code)")
         }
     }
 }
@@ -24,12 +24,12 @@ public enum ArchivePath {
     public static func validate(_ path: String) throws -> String {
         guard !path.isEmpty, !path.hasPrefix("/"), !path.hasPrefix("\\"),
               !path.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }), !path.contains("\\") else {
-            throw FMError.message("This archive path cannot be used safely: \(path.debugDescription)")
+            throw FMError.message(L10n.tr("This archive path cannot be used safely: \(path.debugDescription)"))
         }
         let components = path.split(separator: "/", omittingEmptySubsequences: false)
         guard components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }),
               !(components.first?.contains(":") ?? false) else {
-            throw FMError.message("The archive contains an unsafe or ambiguous path: \(path)")
+            throw FMError.message(L10n.tr("The archive contains an unsafe or ambiguous path: \(path)"))
         }
         return path
     }
@@ -42,7 +42,7 @@ public enum ArchivePath {
     public static func validateName(_ name: String) throws {
         guard !name.isEmpty, name != ".", name != "..", !name.contains("/"), !name.contains("\\"), !name.contains(":"),
               !name.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) else {
-            throw FMError.message("Names cannot be empty or contain /, \\, : or control characters.")
+            throw FMError.message(L10n.tr("Names cannot be empty or contain /, \\, : or control characters."))
         }
     }
 }
@@ -131,7 +131,7 @@ public struct ArchiveListing {
 public enum ConflictPolicy: Int, CaseIterable {
     case rename, skip, replace
     public var title: String {
-        switch self { case .rename: return "Auto rename"; case .skip: return "Skip existing files"; case .replace: return "Replace existing files" }
+        switch self { case .rename: return L10n.tr("Auto rename"); case .skip: return L10n.tr("Skip existing files"); case .replace: return L10n.tr("Replace existing files") }
     }
 }
 public enum ExtractionLayout { case fullPaths, relativeTo(String), flat }
@@ -151,28 +151,28 @@ public struct CompressionOptions {
     public init() {}
     public func validate() throws {
         guard ["7z", "zip", "tar", "gzip", "bzip2", "xz", "wim"].contains(format), (0...9).contains(level),
-              (0...1024).contains(threads) else { throw FMError.message("Invalid compression settings.") }
+              (0...1024).contains(threads) else { throw FMError.message(L10n.tr("Invalid compression settings.")) }
         if format == "7z" {
-            guard ["", "LZMA2", "LZMA", "PPMd", "BZip2"].contains(method) else { throw FMError.message("Unsupported compression method.") }
+            guard ["", "LZMA2", "LZMA", "PPMd", "BZip2"].contains(method) else { throw FMError.message(L10n.tr("Unsupported compression method.")) }
             if !dictionary.isEmpty {
                 guard ["16m", "32m", "64m", "128m", "256m"].contains(dictionary.lowercased()), ["", "LZMA2", "LZMA"].contains(method) else {
-                    throw FMError.message("These dictionary sizes require LZMA or LZMA2.")
+                    throw FMError.message(L10n.tr("These dictionary sizes require LZMA or LZMA2."))
                 }
             }
         }
         if let password = password {
             try Engine.validatePassword(password)
-            guard ["7z", "zip"].contains(format) else { throw FMError.message("Use 7z or ZIP for password encryption.") }
+            guard ["7z", "zip"].contains(format) else { throw FMError.message(L10n.tr("Use 7z or ZIP for password encryption.")) }
             if format == "zip" { try Self.validateZIPPassword(password, aes: zipAES) }
         }
         let volume = try Self.byteCount(volumeSize)
-        guard volume == 0 || volume >= 1024 else { throw FMError.message("Volumes must be at least 1 KiB.") }
+        guard volume == 0 || volume >= 1024 else { throw FMError.message(L10n.tr("Volumes must be at least 1 KiB.")) }
     }
     static func validateZIPPassword(_ password: String, aes: Bool) throws {
         guard password.unicodeScalars.allSatisfy({ (0x20...0x7E).contains($0.value) }) else {
-            throw FMError.message("7-Zip requires printable ASCII passwords when writing ZIP archives. Use 7z for Unicode passwords.")
+            throw FMError.message(L10n.tr("7-Zip requires printable ASCII passwords when writing ZIP archives. Use 7z for Unicode passwords."))
         }
-        if aes && password.utf8.count > 99 { throw FMError.message("ZIP AES passwords can contain at most 99 characters.") }
+        if aes && password.utf8.count > 99 { throw FMError.message(L10n.tr("ZIP AES passwords can contain at most 99 characters.")) }
     }
     public static func byteCount(_ value: String) throws -> UInt64 {
         guard !value.isEmpty else { return 0 }
@@ -181,10 +181,10 @@ public struct CompressionOptions {
         let multiplier = value.last.flatMap { multipliers[$0] } ?? 1
         let digits = multiplier == 1 ? value : String(value.dropLast())
         guard !digits.isEmpty, digits.allSatisfy({ $0 >= "0" && $0 <= "9" }), let number = UInt64(digits), number > 0 else {
-            throw FMError.message("Enter a size such as 100m, 700m or 4g.")
+            throw FMError.message(L10n.tr("Enter a size such as 100m, 700m or 4g."))
         }
         let (bytes, overflow) = number.multipliedReportingOverflow(by: multiplier)
-        guard !overflow, bytes <= UInt64(Int64.max) else { throw FMError.message("The requested size is too large.") }
+        guard !overflow, bytes <= UInt64(Int64.max) else { throw FMError.message(L10n.tr("The requested size is too large.")) }
         return bytes
     }
 }

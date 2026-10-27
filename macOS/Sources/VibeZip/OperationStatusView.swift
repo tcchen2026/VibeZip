@@ -6,8 +6,8 @@ import VibeZipCore
 final class OperationStatusView: NSView {
     let message = NSTextField(labelWithString: "")
     let progress = NSProgressIndicator()
-    let cancel = NSButton(title: "Cancel", target: nil, action: nil)
-    let details = NSButton(title: "Details…", target: nil, action: nil)
+    let cancel = NSButton(title: L10n.tr("Cancel"), target: nil, action: nil)
+    let details = NSButton(title: L10n.tr("Details…"), target: nil, action: nil)
     private let contextLabel = NSTextField(labelWithString: "")
     var context = "" { didSet { contextLabel.stringValue = context; contextLabel.isHidden = context.isEmpty || token != nil || hasNotice } }
     var onDetails: (() -> Void)?
@@ -29,7 +29,7 @@ final class OperationStatusView: NSView {
             button.controlSize = .small; button.bezelStyle = .rounded; button.target = self; button.isHidden = true
         }
         cancel.action = #selector(cancelJob); details.action = #selector(showDetails)
-        cancel.toolTip = "Cancel the current operation. Completed file copies are kept."
+        cancel.toolTip = L10n.tr("Cancel the current operation. Completed file copies are kept.")
         contextLabel.font = .systemFont(ofSize: 10, weight: .medium); contextLabel.textColor = .secondaryLabelColor
         contextLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         let stack = NSStackView(views: [message, progress, details, cancel, contextLabel])
@@ -81,7 +81,7 @@ final class OperationStatusView: NSView {
     }
     @objc func cancelJob() {
         guard let token = token else { return }
-        token.cancel(); cancel.isEnabled = false; display("Cancelling…"); onCancel?()
+        token.cancel(); cancel.isEnabled = false; display(L10n.tr("Cancelling…")); onCancel?()
     }
     @objc private func showDetails() { onDetails?() }
     func update(_ value: ArchiveProgress) {
@@ -93,9 +93,9 @@ final class OperationStatusView: NSView {
             progress.isIndeterminate = true
             if !progress.isHidden { progress.startAnimation(nil) }
         }
-        let names: [ArchiveProgress.Phase: String] = [.open: "Opening", .extract: "Extracting", .test: "Testing", .update: "Compressing", .hash: "Hashing", .copy: "Copying"]
+        let names: [ArchiveProgress.Phase: String] = [.open: L10n.tr("Opening"), .extract: L10n.tr("Extracting"), .test: L10n.tr("Testing"), .update: L10n.tr("Compressing"), .hash: L10n.tr("Hashing"), .copy: L10n.tr("Copying")]
         let percentage = value.fraction.map { " · \(Int($0 * 100))%" } ?? ""
-        display((names[value.phase] ?? "Working") + percentage + (value.path.isEmpty ? "…" : " · " + value.path))
+        display((names[value.phase] ?? L10n.tr("Working")) + percentage + (value.path.isEmpty ? "…" : " · " + value.path))
     }
     func append(_ chunk: String) {
         guard let token = token, !token.isCancelled else { return }
@@ -112,7 +112,7 @@ final class OperationProgressWindow: NSWindowController {
     private let progress = NSProgressIndicator()
     private let amount = NSTextField(labelWithString: "")
     private let elapsed = NSTextField(labelWithString: "")
-    private let cancelButton = NSButton(title: "Cancel", target: nil, action: nil)
+    private let cancelButton = NSButton(title: L10n.tr("Cancel"), target: nil, action: nil)
     private let token: CancellationToken
     private let startedAt: TimeInterval
     private let onCancel: () -> Void
@@ -168,7 +168,7 @@ final class OperationProgressWindow: NSWindowController {
         guard !token.isCancelled else { return }
         if let fraction = value.fraction {
             progress.stopAnimation(nil); progress.isIndeterminate = false; progress.doubleValue = fraction * 100
-            amount.stringValue = "\(Int(fraction * 100))% · \(UIFormat.bytes(value.completed)) of \(UIFormat.bytes(value.total))"
+            amount.stringValue = L10n.tr("\(Int(fraction * 100))% · \(UIFormat.bytes(value.completed)) of \(UIFormat.bytes(value.total))")
         } else {
             progress.isIndeterminate = true; progress.startAnimation(nil)
             amount.stringValue = value.completed > 0 ? UIFormat.bytes(value.completed) : ""
@@ -182,11 +182,12 @@ final class OperationProgressWindow: NSWindowController {
             detail.stringValue = String(line.prefix(300)); detail.toolTip = detail.stringValue
         }
     }
-    func showCancelling() { cancelButton.isEnabled = false; detail.stringValue = "Cancelling…" }
+    func showCancelling() { cancelButton.isEnabled = false; detail.stringValue = L10n.tr("Cancelling…") }
     @objc private func cancel() { onCancel(); showCancelling() }
     private func updateElapsed() {
         let seconds = Int(max(0, ProcessInfo.processInfo.systemUptime - startedAt))
-        elapsed.stringValue = String(format: "Elapsed %02d:%02d", seconds / 60, seconds % 60)
+        let time = String(format: "%02d:%02d", seconds / 60, seconds % 60)
+        elapsed.stringValue = L10n.tr("Elapsed \(time)")
     }
 }
 

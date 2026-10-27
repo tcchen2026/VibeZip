@@ -2,7 +2,8 @@
 
 VibeZip is a 7-Zip fork with a native macOS archive manager. Its purpose is to
 make large and nested archives usable through a familiar file manager with one or two browser panes, with explicit folder authorization and a path to Mac App Store
-distribution. The app uses the archive engine directly and defaults to English.
+distribution. The app uses the archive engine directly and follows the macOS app
+language, with English as its fallback.
 
 These documents describe the implementation in this repository and the reasons
 for its main design choices. Sections named **Open work** identify capabilities

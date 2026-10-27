@@ -17,12 +17,12 @@ enum LocalPreview {
     /// without links, actions, JavaScript, WebKit or Quick Look providers.
     static func load(_ url: URL, token: CancellationToken) throws -> LocalPreview {
         let descriptor = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW | O_NONBLOCK)
-        guard descriptor >= 0 else { throw FMError.message("Cannot read this file for preview.") }
+        guard descriptor >= 0 else { throw FMError.message(L10n.tr("Cannot read this file for preview.")) }
         let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
         defer { try? handle.close() }
         var metadata = stat()
         guard fstat(descriptor, &metadata) == 0, metadata.st_mode & S_IFMT == S_IFREG else {
-            throw FMError.message("Only regular files can be previewed.")
+            throw FMError.message(L10n.tr("Only regular files can be previewed."))
         }
         let textLimit = 4 * 1024 * 1024, documentLimit = 32 * 1024 * 1024
         var data = Data()
@@ -45,14 +45,14 @@ enum LocalPreview {
         if isPDF || isRaster {
             try read(upTo: documentLimit + 1)
             guard data.count <= documentLimit else {
-                return .text("This document exceeds the 32 MiB built-in preview limit.", note: "Preview size limit")
+                return .text(L10n.tr("This document exceeds the 32 MiB built-in preview limit."), note: L10n.tr("Preview size limit"))
             }
             try token.check()
             if isPDF, let provider = CGDataProvider(data: data as CFData), let document = CGPDFDocument(provider),
                let page = document.page(at: 1) {
                 let bounds = page.getBoxRect(.cropBox)
                 guard bounds.width.isFinite, bounds.height.isFinite, bounds.width > 0, bounds.height > 0 else {
-                    throw FMError.message("The PDF page has invalid dimensions.")
+                    throw FMError.message(L10n.tr("The PDF page has invalid dimensions."))
                 }
                 let scale = min(2, 1800 / max(bounds.width, bounds.height))
                 let width = max(1, Int(ceil(bounds.width * scale))), height = max(1, Int(ceil(bounds.height * scale)))
@@ -63,7 +63,7 @@ enum LocalPreview {
                     context.concatenate(page.getDrawingTransform(.cropBox, rect: rect, rotate: 0, preserveAspectRatio: true))
                     context.drawPDFPage(page)
                     if let image = context.makeImage() {
-                        return .image(image, note: "PDF · Page 1 of \(document.numberOfPages)")
+                        return .image(image, note: L10n.tr("PDF · Page 1 of \(document.numberOfPages)"))
                     }
                 }
             } else if isRaster, let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) {
@@ -71,17 +71,17 @@ enum LocalPreview {
                     kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: 2048,
                     kCGImageSourceShouldCacheImmediately: true] as CFDictionary
                 if let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options) {
-                    return .image(image, note: "Image preview")
+                    return .image(image, note: L10n.tr("Image preview"))
                 }
             }
-            return .text("This document could not be rendered by the built-in preview.", note: "Preview unavailable")
+            return .text(L10n.tr("This document could not be rendered by the built-in preview."), note: L10n.tr("Preview unavailable"))
         }
         let prefix = Data(data.prefix(textLimit))
         // A byte limit can split the final UTF-8 code point.
         for trim in 0...min(3, prefix.count) {
             if let text = String(data: prefix.dropLast(trim), encoding: .utf8), !text.contains("\0") {
                 let truncated = data.count > textLimit
-                return .text(text, note: truncated ? "Text · First 4 MiB" : "Text preview")
+                return .text(text, note: truncated ? L10n.tr("Text · First 4 MiB") : L10n.tr("Text preview"))
             }
         }
         let bytes = [UInt8](data.prefix(16 * 1024)); var lines: [String] = []
@@ -91,7 +91,7 @@ enum LocalPreview {
             let ascii = String(block.map { $0 >= 32 && $0 < 127 ? Character(UnicodeScalar($0)) : "." })
             lines.append(String(format: "%08X  ", offset) + hex.padding(toLength: 47, withPad: " ", startingAt: 0) + "  " + ascii)
         }
-        return .text(lines.joined(separator: "\n"), note: "Binary · First 16 KiB")
+        return .text(lines.joined(separator: "\n"), note: L10n.tr("Binary · First 16 KiB"))
     }
 }
 
@@ -99,7 +99,7 @@ enum LocalPreview {
 final class LocalTextView: NSTextView {
     override func menu(for event: NSEvent) -> NSMenu? {
         let menu = NSMenu()
-        for (title, action) in [("Copy", #selector(copy(_:))), ("Select All", #selector(selectAll(_:)))] {
+        for (title, action) in [(L10n.tr("Copy"), #selector(copy(_:))), (L10n.tr("Select All"), #selector(selectAll(_:)))] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: ""); item.target = self; menu.addItem(item)
         }
         return menu
@@ -113,7 +113,7 @@ final class PreviewWindow: NSWindowController, NSWindowDelegate {
     init(name: String, content: LocalPreview) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 850, height: 620),
             styleMask: [.titled, .closable, .resizable, .miniaturizable], backing: .buffered, defer: false)
-        window.title = "Preview — " + name; window.minSize = NSSize(width: 500, height: 320)
+        window.title = L10n.tr("Preview — \(name)"); window.minSize = NSSize(width: 500, height: 320)
         window.isReleasedWhenClosed = false
         super.init(window: window); window.delegate = self
         status.stringValue = content.note; status.font = .systemFont(ofSize: 11); status.textColor = .secondaryLabelColor

@@ -33,6 +33,13 @@ because the upstream makefiles do not track every header dependency.
 [Package.swift](../macOS/Package.swift) defines the C++ bridge, core library and
 AppKit/SwiftUI executable targets.
 
+SwiftPM processes the core target's `Resources/*.lproj` folders into
+`VibeZip_VibeZipCore.bundle`. The app build copies that bundle into
+`Contents/Resources`; runtime lookup uses this copy before SwiftPM's development
+bundle, so translations and localized Help/Privacy work away from the checkout.
+`Info.plist` declares the same supported languages. Add a key to all four
+`Localizable.strings` tables and preserve its interpolation arguments.
+
 Build scripts keep Swift caches under `macOS/.build/` and use SwiftPM's
 `--disable-sandbox` flag. That flag concerns SwiftPM's build-time sandbox; it does
 not disable the resulting application's App Sandbox. Runtime entitlements are
@@ -51,6 +58,10 @@ validate those features.
 | Real engine reads/writes, passwords, nested transactions, corruption and limits | [EngineIntegrationTests.swift](../macOS/Tests/VibeZipCoreTests/EngineIntegrationTests.swift) |
 | Saved access, moved/offline roots, overlapping grants and restoration | [DirectoryAccessStoreTests.swift](../macOS/Tests/VibeZipCoreTests/DirectoryAccessStoreTests.swift) |
 | Legacy filename bytes and consistent downstream behavior | [ZIPFilenameEncodingTests.swift](../macOS/Tests/VibeZipCoreTests/ZIPFilenameEncodingTests.swift) |
+| Translation coverage, placeholder arguments, language fallback, bundled documents and sandbox configuration | [LocalizationTests.swift](../macOS/Tests/VibeZipCoreTests/LocalizationTests.swift) |
+| Temporary-file cleanup and size totals, active locks, cancellation, symlink boundaries and private directory lifetime | [TemporaryFilesTests.swift](../macOS/Tests/VibeZipCoreTests/TemporaryFilesTests.swift) |
+| Home abbreviation, path boundaries and nested-archive address round trips | [UserPathTests.swift](../macOS/Tests/VibeZipCoreTests/UserPathTests.swift) |
+| Default-app request sequencing, duplicate types, existing defaults and declined requests | [DefaultApplicationBatchTests.swift](../macOS/Tests/VibeZipCoreTests/DefaultApplicationBatchTests.swift) |
 
 Use targeted tests for changed core behavior and integration tests for engine or
 transaction changes. Fixtures should be generated in temporary directories.

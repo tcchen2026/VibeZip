@@ -1,0 +1,12 @@
+VibeZip Privacy
+
+VibeZip processes your files on your Mac. The application does not collect or transmit your files, filenames, passwords, browsing history or usage data. It has no analytics, advertising, account system or network access.
+
+Folder access
+You choose which folders VibeZip can browse and manage. VibeZip stores macOS security-scoped bookmarks and folder paths locally to remember these permissions, together with the last directory you visited. Settings > Folder Access lets you add, renew or remove saved access. Removing access removes its saved bookmark; it does not delete your files. Access already granted to overlapping folders can still cover the same location.
+
+Local data
+Preferences, window layout and folder permissions remain on this Mac. Archive passwords are kept in memory and can be cleared from the Tools menu or by quitting. Preview and nested-archive operations can create private temporary copies, including decrypted content, which are removed during normal cleanup. An interrupted process can leave temporary files until the system or a later cleanup removes them. Settings > General can show the temporary folder in Finder or clean unused temporary files. Files still in use are kept. Archive backups you enable remain beside your archive until you delete them.
+
+External actions
+Reveal in Finder shows selected files using macOS Finder. Preview stays inside VibeZip. The GitHub button opens the project page in your web browser. VibeZip does not execute archive contents or open files in external viewers or editors.

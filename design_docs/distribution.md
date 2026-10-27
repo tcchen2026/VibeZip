@@ -38,7 +38,8 @@ and write its checksum. Notarization failures stop the build and leave diagnosti
 JSON under `dist/`. Private keys are never bundled.
 
 Both signing paths use `Resources/VibeZip.entitlements`, which enables App
-Sandbox, user-selected read/write access and app-scoped bookmarks. Standard
+Sandbox, user-selected read/write access and app-scoped bookmarks, and explicitly
+disables incoming and outgoing network access. Standard
 `codesign` verification remains part of packaging.
 
 ## Manual GitHub Actions workflow

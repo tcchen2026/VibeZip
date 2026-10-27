@@ -1,7 +1,8 @@
 # Interface and interaction
 
-The interface should feel like a compact macOS file manager. English is the
-default language. One or two file panes carry filesystem and archive browsing, including nested
+The interface should feel like a compact macOS file manager. It follows the macOS
+app language, supporting English, Simplified Chinese, Japanese and Korean, with
+English as the fallback. One or two file panes carry filesystem and archive browsing, including nested
 archives. The active pane owns command targets, filter text and the Info selection. Prefer native AppKit controls, readable
 rows and familiar actions over decorative panels or new navigation modes.
 
@@ -11,6 +12,9 @@ The layout adapts the supplied Sevenfold SwiftUI design to VibeZip's real,
 browser, including the prototype's optional second pane. It remains compatible with macOS 26 and later; native
 materials follow the running system's appearance.
 
+The title bar shows `VibeZip - <active folder or archive name>`, or just `VibeZip`
+before a location is opened. It has no subtitle.
+
 The default arrangement has these working areas:
 
 1. A collapsible sidebar: Favorites are actual saved folder grants, followed by
@@ -18,21 +22,22 @@ The default arrangement has these working areas:
    the existing system permission picker. Unavailable grants remain visible.
 2. A native toolbar: Sidebar, Back and Forward at the left; Add, Extract and Test
    grouped separately from Copy, Move, Delete, Preview and Info.
-3. A dismissible shortcut strip and rounded breadcrumb location row. Up and
+3. A rounded breadcrumb location row. Up and
    Folders History sit beside each path; the toolbar filter follows the active pane.
 4. Icons, List or a sortable inset Details table in each pane and a fixed-height status area showing counts,
    sizes, archive format and operation feedback.
 5. An optional Info inspector showing the current selection and archive's live
    metadata. Command-I toggles it without opening a separate window.
 
-Sidebar, inspector, two-pane mode and key-tip visibility are saved locally.
-F9 toggles two panes in 7-Zip keyboard mode; Tab changes the active pane. Each
+Sidebar, inspector and two-pane mode are saved locally.
+The toolbar's **2 Panels** control toggles two panes; Tab changes the active pane. Each
 pane keeps its own path, history, filter, view style and selection. Both panes
 refresh after archive mutations, and each permission check uses the same shared
 DirectoryAccessStore. Copy/Move offers the other pane's filesystem folder as its
 default destination. Switching panes during an active operation is disabled so
 completion and cancellation remain attached to the initiating pane.
-View can restore hidden areas; Help → Shortcut Map lists the implemented keys.
+View can restore the sidebar and inspector. Shortcut tips, maps, key-mode
+selectors and platform comparisons are not part of the shipping interface.
 Empty folders and searches have distinct empty states. The prototype's sample
 files, simulated operations, external viewers and unimplemented
 Finder integration are not part of this adaptation.
@@ -41,12 +46,21 @@ Use consistent toolbar spacing and vertically center every table cell's text
 and icon, including metadata columns and the Folder Access table. The property
 action is named **Info**. The toolbar remains customizable through native macOS
 behavior; these rules describe its default arrangement.
+When the toolbar overflows, **View** in the `»` menu has **Icons**, **List** and
+**Details** children. Their checkmarks and actions follow the active pane.
 
-The location control shows breadcrumbs until clicked or focused with Command-L.
-The whole breadcrumb area enters text editing. Return submits; Escape restores
-the displayed location. Entering a path still passes through the folder access
-rules. Back and Forward traverse navigation history; Up moves toward a parent
-directory or out of the current archive context.
+Click an ancestor breadcrumb to navigate directly to that directory, archive root
+or folder inside an archive. Archive breadcrumbs retain their existing sessions,
+including parent archives and containing folders when a nested archive was opened
+from search. Filesystem destinations still pass through the folder access rules.
+Click the current location or empty space, or use Command-L, to edit the path.
+Return submits; Escape restores the displayed location. Entering a path still
+passes through the folder access rules. Back and Forward traverse navigation
+history; Up moves toward a parent directory or out of the current archive context.
+Locations within the user's home display `~` as the first breadcrumb and use
+paths such as `~/Downloads` in the editor and history. Expansion uses the account's
+home directory from the account database, including in the sandbox, and still passes through folder access
+checks. Nested archive paths retain this abbreviation without changing session identity.
 
 Sources: [MainWindowController.swift](../macOS/Sources/VibeZip/MainWindowController.swift),
 [BrowserChrome.swift](../macOS/Sources/VibeZip/BrowserChrome.swift),
@@ -127,20 +141,66 @@ granted; displaying a place never grants permission. A later launch restores the
 authorized directory. Settings exposes saved grants so users can understand and
 change the app's access.
 
-The About window's content is one black GitHub badge, with a subtle border,
-highlight and shadow. It links to the project URL in
+The compact About window shows the app icon, name, version from the bundle,
+a one-line description, a labeled black GitHub button with a subtle border,
+highlight and shadow, and a small localized “Licensed under LGPL 2.1 or later” footer.
+The button links to the project URL in
 [Info.plist](../macOS/Resources/Info.plist), currently
 [tcchen2026/VibeZip](https://github.com/tcchen2026/VibeZip).
-Keep licensing detail in the bundled notices and source documentation. Maintain
+Full license terms and third-party notices remain bundled with the app. Maintain
 keyboard focus, accessibility labels and adequate contrast when changing custom
 controls. Visual layout review is manual; do not add screenshot test machinery
 for routine spacing changes.
 
-## Settings and shortcuts
+## Settings
 
-Settings uses General, Folder Access and Keyboard tabs. The sidebar and shortcut
-map also select 7-Zip or Mac key mode. 7-Zip mode enables F2–F9 and Backspace
-for Up; Mac mode uses Delete for Trash and Command-Up for Up. Space and Command-Y
-preview in both modes. Shortcut Map has a filter, a side-by-side key comparison
-and a What Moved tab. Compression, extraction and transfer forms share the
-design's symbol, heading and footer layout while retaining real option validation.
+Settings uses General and Folder Access tabs. Keyboard bindings continue to work
+without dedicated shortcut UI; a key-mode preference saved by an older build is
+still honored so existing users' keys do not change. Compression, extraction and
+transfer forms share the design's symbol, heading and footer layout while
+retaining real option validation.
+
+General includes a short explanation of temporary files, **Show Temporary Folder**
+to open VibeZip's dedicated temporary folder in Finder, and **Clean Temporary Files**
+to remove unused copies. Live scratch directories are kept. Cleanup runs off the
+main thread and shows cancellable progress after one second; Settings stays open
+until cleanup completes or cancellation finishes. The controls and explanation
+are translated into each supported language.
+
+A compact MB/GB total beside the temporary-files heading counts all regular files
+in the dedicated folder, including copies still in use. It reads metadata in the
+background when Settings opens and after cleanup, including cancellation or a
+partial failure. Closing Settings cancels the scan. The total is logical file size,
+not a claim about reclaimable space or physical allocation; links are not followed.
+
+General also includes **Set VibeZip as Default** with a file-format selector.
+The first and initially selected item is `.zip/.7z/.rar`, followed by the individual
+extensions declared by the app. The button requests the selected content types
+through [NSWorkspace](https://developer.apple.com/documentation/appkit/nsworkspace/setdefaultapplication(at:toopen:completion:)).
+Requests run one at a time, skip types already assigned to this app, and deduplicate
+aliases. macOS may ask for confirmation for each type. The control reads back each
+actual default before continuing; a declined or unsuccessful request stops the
+batch and preserves earlier confirmed changes. Single-format failures show a brief
+Finder **Get Info → Open with → Change All** instruction. No association is changed at
+launch or merely by opening Settings. Aliases of the same macOS content type share
+their default app. The native consent flow requires manual testing in the signed app.
+
+## Language and localization
+
+Menus, toolbar controls, dialogs, accessibility text, the Info inspector, normal
+operation feedback and Swift error messages use shared translation tables in
+[VibeZipCore/Resources](../macOS/Sources/VibeZipCore/Resources/). Help and Privacy
+have a document for each supported language. Native engine diagnostics and system
+errors retain the language supplied by their source; bundled license notices
+remain in their original language.
+
+macOS chooses the app language from the user's preferred languages or the
+per-app setting in System Settings → General → Language & Region. Reopen VibeZip
+after changing that setting. No in-app language selector is required.
+
+[Localization.swift](../macOS/Sources/VibeZipCore/Localization.swift) keeps fixed
+translation keys separate from interpolated filenames, paths, counts and codec
+names. Translations can reorder arguments without changing their contents.
+Archive metadata keys, compression identifiers and saved preferences stay stable.
+Displayed filesystem and archive dates use the current locale. Form labels and
+folder-access buttons size to their translated text within the available width.

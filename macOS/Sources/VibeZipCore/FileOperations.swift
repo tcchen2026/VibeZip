@@ -8,13 +8,38 @@ import Glibc
 public final class ScratchDirectory {
     public let url: URL
     private var retained = false
-    public init(parent: URL = FileManager.default.temporaryDirectory, label: String = "work") throws {
-        url = parent.resolvingSymlinksInPath().appendingPathComponent(".VibeZip-\(label)-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false,
+    private let lease: TemporaryDirectoryLease?
+    public convenience init(label: String = "work") throws {
+        try self.init(temporaryParent: TemporaryFiles.prepareDirectory(), label: label)
+    }
+    public convenience init(parent: URL, label: String = "work") throws {
+        try self.init(parent: parent, label: label, managed: false)
+    }
+    convenience init(temporaryParent: URL, label: String = "work") throws {
+        try self.init(parent: temporaryParent, label: label, managed: true)
+    }
+    private init(parent: URL, label: String, managed: Bool) throws {
+        let parent = parent.resolvingSymlinksInPath()
+        let name = "VibeZip-\(label)-\(UUID().uuidString)"
+        let staging = parent.appendingPathComponent("." + name, isDirectory: true)
+        url = managed ? parent.appendingPathComponent(name, isDirectory: true) : staging
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: false,
             attributes: [.posixPermissions: NSNumber(value: 0o700)])
+        do {
+            // Publish only after locking, so cleanup cannot race a new operation.
+            if managed {
+                lease = try TemporaryDirectoryLease(staging)
+                try FileManager.default.moveItem(at: staging, to: url)
+            } else { lease = nil }
+        } catch {
+            try? FileManager.default.removeItem(at: staging)
+            throw error
+        }
     }
     public func retainOnDisk() -> URL { retained = true; return url }
-    deinit { if !retained { try? FileManager.default.removeItem(at: url) } }
+    deinit {
+        withExtendedLifetime(lease) { if !retained { try? FileManager.default.removeItem(at: url) } }
+    }
 }
 
 public struct FileFingerprint: Equatable {
@@ -44,7 +69,7 @@ public enum SafeFileSystem {
 
     public static func ensureDirectory(_ directory: URL) throws {
         if let type = type(of: directory) {
-            guard type == .typeDirectory else { throw FMError.message("The destination is not a regular folder or contains a symbolic link: \(directory.path)") }
+            guard type == .typeDirectory else { throw FMError.message(L10n.tr("The destination is not a regular folder or contains a symbolic link: \(directory.path)")) }
         } else {
             try ensureDirectory(directory.deletingLastPathComponent())
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
@@ -75,16 +100,16 @@ public enum SafeFileSystem {
             let attrs = try FileManager.default.attributesOfItem(atPath: url.path)
             let type = attrs[.type] as? FileAttributeType
             if type == .typeSymbolicLink {
-                if rejectLinks { throw FMError.message("Extracting symbolic links is not supported: \(url.lastPathComponent)") }
+                if rejectLinks { throw FMError.message(L10n.tr("Extracting symbolic links is not supported: \(url.lastPathComponent)")) }
                 return
             }
             guard type == .typeRegular || type == .typeDirectory else {
-                throw FMError.message("Special files such as devices and sockets are not supported: \(url.path)")
+                throw FMError.message(L10n.tr("Special files such as devices and sockets are not supported: \(url.path)"))
             }
             if type == .typeRegular {
                 let bytes = (attrs[.size] as? NSNumber)?.uint64Value ?? 0
                 let (sum, overflow) = total.addingReportingOverflow(bytes)
-                guard !overflow, sum <= limit else { throw FMError.message("Extracted data exceeds the configured size limit.") }
+                guard !overflow, sum <= limit else { throw FMError.message(L10n.tr("Extracted data exceeds the configured size limit.")) }
                 total = sum
             }
         }
@@ -107,14 +132,14 @@ public enum SafeFileSystem {
         let sourceType = type(of: source)
         guard sourceType == .typeRegular || sourceType == .typeDirectory ||
                 (allowSourceLinks && sourceType == .typeSymbolicLink) else {
-            throw FMError.message("Cannot copy this special file or archive link: \(source.path)")
+            throw FMError.message(L10n.tr("Cannot copy this special file or archive link: \(source.path)"))
         }
         let parent = requestedDestination.deletingLastPathComponent()
         try ensureDirectory(parent)
         var destination = requestedDestination
         let destinationType = type(of: destination)
         // Existing destination symlinks are never followed or silently replaced.
-        if destinationType == .typeSymbolicLink { throw FMError.message("The destination contains a symbolic link: \(destination.path)") }
+        if destinationType == .typeSymbolicLink { throw FMError.message(L10n.tr("The destination contains a symbolic link: \(destination.path)")) }
         if sourceType == .typeDirectory && destinationType == .typeDirectory {
             var complete = true
             for item in try FileManager.default.contentsOfDirectory(at: source, includingPropertiesForKeys: nil) {
@@ -129,7 +154,7 @@ public enum SafeFileSystem {
             case .rename: destination = uniqueURL(destination)
             case .replace:
                 guard sourceType != .typeDirectory, destinationType == .typeRegular else {
-                    throw FMError.message("A file and a folder share this name. Choose Auto rename: \(destination.path)")
+                    throw FMError.message(L10n.tr("A file and a folder share this name. Choose Auto rename: \(destination.path)"))
                 }
             }
         }
@@ -153,7 +178,7 @@ public enum SafeFileSystem {
         try FileManager.default.copyItem(at: source, to: temporary)
         try token.check()
         if policy == .replace && destinationType != nil {
-            guard type(of: destination) == .typeRegular else { throw FMError.message("The destination changed while copying.") }
+            guard type(of: destination) == .typeRegular else { throw FMError.message(L10n.tr("The destination changed while copying.")) }
             try atomicReplace(temporary, destination: destination)
         } else {
             // moveItem fails if another process creates the name, rather than clobbering it.
@@ -173,14 +198,14 @@ public enum FileOperations {
         for source in sources {
             let source = source.standardizedFileURL
             let destination = directory.appendingPathComponent(source.lastPathComponent)
-            guard source != destination else { throw FMError.message("The source and destination are the same file.") }
+            guard source != destination else { throw FMError.message(L10n.tr("The source and destination are the same file.")) }
             if SafeFileSystem.type(of: source) == .typeDirectory {
                 let canonical = source.resolvingSymlinksInPath().path
                 guard !directory.path.hasPrefix(canonical + "/"), directory.path != canonical else {
-                    throw FMError.message("A folder cannot be copied or moved inside itself.")
+                    throw FMError.message(L10n.tr("A folder cannot be copied or moved inside itself."))
                 }
             }
-            try token.check(); output((move ? "Move " : "Copy ") + source.path + "\n")
+            try token.check(); output(move ? L10n.tr("Move \(source.path)\n") : L10n.tr("Copy \(source.path)\n"))
             let complete = try SafeFileSystem.merge(source, into: destination, policy: policy,
                 token: token, report: &report, allowSourceLinks: true)
             // A skipped item means the source tree must stay intact.
@@ -192,14 +217,14 @@ public enum FileOperations {
     public static func split(_ source: URL, to base: URL, volumeBytes: UInt64,
                              token: CancellationToken, output: (String) -> Void = { _ in }) throws -> [URL] {
         guard volumeBytes >= 1024, SafeFileSystem.type(of: source) == .typeRegular else {
-            throw FMError.message("The source must be a regular file and the volume size must be at least 1 KiB.")
+            throw FMError.message(L10n.tr("The source must be a regular file and the volume size must be at least 1 KiB."))
         }
         let before = try FileFingerprint(source)
         let count64 = max(1, before.size / volumeBytes + (before.size % volumeBytes == 0 ? 0 : 1))
-        guard count64 <= 999_999 else { throw FMError.message("Too many volumes requested.") }
+        guard count64 <= 999_999 else { throw FMError.message(L10n.tr("Too many volumes requested.")) }
         let count = Int(count64)
         let destinations = (1...count).map { base.appendingPathExtension(String(format: "%03d", $0)) }
-        guard destinations.allSatisfy({ !SafeFileSystem.exists($0) }) else { throw FMError.message("An output volume already exists.") }
+        guard destinations.allSatisfy({ !SafeFileSystem.exists($0) }) else { throw FMError.message(L10n.tr("An output volume already exists.")) }
         try SafeFileSystem.ensureDirectory(base.deletingLastPathComponent().resolvingSymlinksInPath())
         let scratch = try ScratchDirectory(parent: base.deletingLastPathComponent(), label: "split")
         let input = try FileHandle(forReadingFrom: source); defer { try? input.close() }
@@ -213,14 +238,14 @@ public enum FileOperations {
                 while remaining > 0 {
                     try token.check()
                     let data = try input.read(upToCount: Int(min(remaining, 1024 * 1024))) ?? Data()
-                    guard !data.isEmpty else { throw FMError.message("The source file became shorter while splitting.") }
+                    guard !data.isEmpty else { throw FMError.message(L10n.tr("The source file became shorter while splitting.")) }
                     try handle.write(contentsOf: data); remaining -= UInt64(data.count)
                 }
                 try handle.close()
             } catch { try? handle.close(); throw error }
             staged.append(file); output("\((index + 1) * 100 / count)%  \(destination.lastPathComponent)\n")
         }
-        guard try FileFingerprint(source) == before else { throw FMError.message("The source file changed while splitting.") }
+        guard try FileFingerprint(source) == before else { throw FMError.message(L10n.tr("The source file changed while splitting.")) }
         try token.check(); var committed: [URL] = []
         do {
             for (file, destination) in zip(staged, destinations) {
@@ -233,7 +258,7 @@ public enum FileOperations {
     public static func combine(_ first: URL, to destination: URL, token: CancellationToken,
                                output: (String) -> Void = { _ in }) throws -> [URL] {
         guard first.pathExtension == "001", !SafeFileSystem.exists(destination) else {
-            throw FMError.message("Choose the .001 volume and a new output filename.")
+            throw FMError.message(L10n.tr("Choose the .001 volume and a new output filename."))
         }
         let base = first.deletingPathExtension()
         let names = try FileManager.default.contentsOfDirectory(atPath: first.deletingLastPathComponent().path)
@@ -245,7 +270,7 @@ public enum FileOperations {
             return Int(ext)
         }.filter { $0 > 0 }.sorted()
         guard let last = indexes.last, last <= 999_999, indexes == Array(1...last) else {
-            throw FMError.message("Volume numbers are not consecutive. A volume is missing or duplicated.")
+            throw FMError.message(L10n.tr("Volume numbers are not consecutive. A volume is missing or duplicated."))
         }
         let parts = (1...last).map { base.appendingPathExtension(String(format: "%03d", $0)) }
         let snapshots = try parts.map { try FileFingerprint($0) }
@@ -262,7 +287,7 @@ public enum FileOperations {
                     }
                     try input.close()
                 } catch { try? input.close(); throw error }
-                guard try FileFingerprint(part) == snapshots[index] else { throw FMError.message("A volume changed while combining.") }
+                guard try FileFingerprint(part) == snapshots[index] else { throw FMError.message(L10n.tr("A volume changed while combining.")) }
                 output("\((index + 1) * 100 / parts.count)%  \(part.lastPathComponent)\n")
             }
             try handle.close(); try token.check()

@@ -324,12 +324,14 @@ final class EngineIntegrationTests: XCTestCase {
         let root = try service.open(outer, password: seven.password)
         let mid = try service.openNested(in: root, index: root.listing.entries[0].index!)
         XCTAssertFalse(mid.usesDirectStream)
+        XCTAssertTrue(SafeFileSystem.exists(mid.url))
         let leaf = try service.openNested(in: mid, index: mid.listing.entries[0].index!, password: zip.password)
         XCTAssertTrue(leaf.usesDirectStream); XCTAssertTrue(leaf.canModify)
+        XCTAssertFalse(SafeFileSystem.exists(leaf.url.deletingLastPathComponent()))
         try Data("edited through three levels".utf8).write(to: text)
         let result = try service.updateFile(text, path: "note.txt", in: leaf.url, password: zip.password)
         XCTAssertEqual(try Data(contentsOf: result.backup!), original)
-        XCTAssertTrue(result.log.contains("3 archive level(s)"))
+        XCTAssertTrue(result.log.contains(L10n.tr("Changes committed. \(3) archive level(s) verified.\n")))
         try service.extract(leaf.url, to: output("edited"), password: zip.password)
         XCTAssertEqual(try String(contentsOf: output("edited").appendingPathComponent("note.txt")), "edited through three levels")
         _ = try service.rename("note.txt", to: "renamed.txt", in: leaf.url, password: zip.password, backup: false)
@@ -425,6 +427,27 @@ final class EngineIntegrationTests: XCTestCase {
         XCTAssertEqual(contents, ["first", "second"])
     }
 
+    func testTarXZNestedStreamDoesNotKeepAnEmptyTemporaryFolder() throws {
+        let text = try file("note.txt", "streamed TAR contents")
+        var tar = CompressionOptions(); tar.format = "tar"
+        let inner = output("contents.tar")
+        _ = try service.create([text], output: inner, options: tar)
+        var xz = CompressionOptions(); xz.format = "xz"
+        let outer = archive("tar.xz")
+        _ = try service.create([inner], output: outer, options: xz)
+        let root = try service.open(outer)
+        let entry = try XCTUnwrap(root.listing.entries.first)
+        let child = try service.openNested(in: root, index: try XCTUnwrap(entry.index))
+        XCTAssertTrue(child.usesDirectStream)
+        XCTAssertEqual(child.listing.format, "tar")
+        XCTAssertFalse(SafeFileSystem.exists(child.url.deletingLastPathComponent()))
+        try service.extract(child.url, to: output("tar-xz"))
+        XCTAssertEqual(try String(contentsOf: output("tar-xz/note.txt"), encoding: .utf8), "streamed TAR contents")
+        service.forgetPasswords()
+        XCTAssertEqual(try service.list(child.url).entries.first?.path, "note.txt")
+        XCTAssertTrue(child.usesDirectStream)
+    }
+
     func testSparseFiveGiBArchiveUsesSeekableNestedStream() throws {
         let text = try file("tiny.txt", "read beyond 4 GiB")
         var zip = CompressionOptions(); zip.format = "zip"
@@ -444,6 +467,7 @@ final class EngineIntegrationTests: XCTestCase {
         let entry = try XCTUnwrap(root.listing.entries.first { $0.path == "inner.zip" })
         let child = try service.openNested(in: root, index: entry.index!)
         XCTAssertTrue(child.usesDirectStream)
+        XCTAssertFalse(SafeFileSystem.exists(child.url.deletingLastPathComponent()))
         try service.extract(child.url, to: output("large-offset"))
         XCTAssertEqual(try String(contentsOf: output("large-offset").appendingPathComponent("tiny.txt")), "read beyond 4 GiB")
         XCTAssertLessThan(root.bytesRead, 4 * 1024 * 1024)

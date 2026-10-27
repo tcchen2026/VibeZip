@@ -1,32 +1,50 @@
 #if os(macOS)
 import AppKit
+import VibeZipCore
 
 private final class LocationPathControl: NSPathControl {
     var onEdit: (() -> Void)?
+    var onChoose: ((NSPathControlItem) -> Void)?
+    private var activatedItem = false
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        target = self; action = #selector(chooseItem)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     override var acceptsFirstResponder: Bool { true }
-    override func mouseDown(with event: NSEvent) { onEdit?() }
+    override func mouseDown(with event: NSEvent) {
+        activatedItem = false
+        super.mouseDown(with: event)
+        if !activatedItem { onEdit?() }
+    }
     override func keyDown(with event: NSEvent) {
         if [36, 76, 49].contains(event.keyCode) { onEdit?() } else { super.keyDown(with: event) }
     }
-    override func accessibilityPerformPress() -> Bool { onEdit?(); return true }
+    @objc private func chooseItem() {
+        activatedItem = true
+        if let item = clickedPathItem { onChoose?(item) } else { onEdit?() }
+    }
 }
 
 /// Displays the current path as native breadcrumbs until the user chooses to edit it.
 final class LocationBar: NSView, NSTextFieldDelegate {
     let editor = NSTextField()
     private let breadcrumbs = LocationPathControl()
+    private var components: [BrowserLocation.Breadcrumb] = []
     private var representedPath = ""
     private var isEditing = false
     var canEdit: (() -> Bool)?
     var onSubmit: ((String) -> Void)?
+    var onNavigate: ((BrowserLocation) -> Void)?
     var onCancel: (() -> Void)?
 
     override var intrinsicContentSize: NSSize { NSSize(width: NSView.noIntrinsicMetric, height: 26) }
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let hit = super.hitTest(point)
-        // The entire breadcrumb area opens the editor, including native path subviews and blank space.
-        return !isEditing && hit != nil ? self : hit
+        guard !isEditing, let hit = hit else { return hit }
+        // Native path items keep their click handling; the surrounding padding edits the path.
+        return hit === breadcrumbs || hit.isDescendant(of: breadcrumbs) ? hit : self
     }
     override func mouseDown(with event: NSEvent) { beginEditing() }
 
@@ -45,14 +63,15 @@ final class LocationBar: NSView, NSTextFieldDelegate {
         breadcrumbs.isEditable = false; breadcrumbs.unregisterDraggedTypes()
         breadcrumbs.cell?.isSelectable = false
         breadcrumbs.font = .systemFont(ofSize: 13)
-        breadcrumbs.setAccessibilityLabel("Location")
-        breadcrumbs.setAccessibilityHelp("Click or press Command-L to edit the path.")
+        breadcrumbs.setAccessibilityLabel(L10n.tr("Location"))
+        breadcrumbs.setAccessibilityHelp(L10n.tr("Click an ancestor to go there. Click the current location or empty space to edit the path."))
         breadcrumbs.onEdit = { [weak self] in self?.beginEditing() }
+        breadcrumbs.onChoose = { [weak self] item in self?.choose(item) }
         editor.font = .monospacedSystemFont(ofSize: 12, weight: .regular)
         editor.isBordered = false; editor.drawsBackground = false; editor.focusRingType = .none
         editor.isEditable = true; editor.isSelectable = true; editor.isEnabled = true
-        editor.placeholderString = "Enter a folder or archive path"
-        editor.setAccessibilityLabel("Location")
+        editor.placeholderString = L10n.tr("Enter a folder or archive path")
+        editor.setAccessibilityLabel(L10n.tr("Location"))
         editor.delegate = self; editor.target = self; editor.action = #selector(submit)
         editor.cell?.sendsActionOnEndEditing = false
         editor.isHidden = true
@@ -69,16 +88,23 @@ final class LocationBar: NSView, NSTextFieldDelegate {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    func show(path: String, components: [String]) {
+    func show(path: String, components: [BrowserLocation.Breadcrumb]) {
         let changed = path != representedPath
         representedPath = path
-        breadcrumbs.pathItems = components.map { title in
-            let item = NSPathControlItem(); item.title = title; return item
+        self.components = components
+        breadcrumbs.pathItems = components.map { component in
+            let item = NSPathControlItem(); item.title = component.title; return item
         }
         breadcrumbs.toolTip = path; breadcrumbs.setAccessibilityValue(path)
         editor.toolTip = path
         if changed { endEditing(moveFocus: true) }
         if !isEditing { editor.stringValue = path }
+    }
+    private func choose(_ item: NSPathControlItem) {
+        guard canEdit?() != false,
+              let index = breadcrumbs.pathItems.firstIndex(where: { $0 === item }), components.indices.contains(index) else { return }
+        if index == components.count - 1 { beginEditing() }
+        else { onNavigate?(components[index].location) }
     }
     func beginEditing() {
         guard canEdit?() != false, let window = window else { return }

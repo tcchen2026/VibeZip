@@ -27,8 +27,8 @@ enum BrowserLocation {
     var display: String {
         switch self {
         case .none: return ""
-        case .directory(let url): return url.path
-        case .archive(let archive, let prefix): return archive.session.displayPath + " ▸ /" + prefix
+        case .directory(let url): return UserPath.abbreviate(url.path)
+        case .archive(let archive, let prefix): return UserPath.abbreviate(archive.session.displayPath) + " ▸ /" + prefix
         }
     }
     var identity: String {
@@ -36,25 +36,41 @@ enum BrowserLocation {
         case .directory(let url): return url.path
         case .archive(let archive, let prefix): return archive.id.uuidString + "/" + prefix }
     }
-    var breadcrumbTitles: [String] {
-        func fileComponents(_ url: URL) -> [String] {
-            let home = FileManager.default.homeDirectoryForCurrentUser.standardizedFileURL
-            let url = url.standardizedFileURL
-            if url.path == home.path || url.path.hasPrefix(home.path + "/") {
-                return [home.lastPathComponent] + Array(url.pathComponents.dropFirst(home.pathComponents.count))
+    struct Breadcrumb {
+        let title: String
+        let location: BrowserLocation
+    }
+    var breadcrumbs: [Breadcrumb] {
+        func fileComponents(_ url: URL) -> [Breadcrumb] {
+            let home = UserPath.homeDirectory
+            var current = url.standardizedFileURL
+            var components: [Breadcrumb] = []
+            while true {
+                components.append(Breadcrumb(title: current.path == home.path ? "~" : (current.path == "/" ? "/" : current.lastPathComponent),
+                                             location: .directory(current)))
+                if current.path == "/" || current.path == home.path { break }
+                current.deleteLastPathComponent()
             }
-            return url.pathComponents
+            return components.reversed()
         }
         switch self {
-        case .none: return ["No folder selected"]
+        case .none: return [Breadcrumb(title: L10n.tr("No folder selected"), location: .none)]
         case .directory(let url): return fileComponents(url)
         case .archive(let archive, let prefix):
-            var members: [String] = []; var session: ArchiveSession? = archive.session
-            while let current = session, current.parent != nil {
-                members.append(current.parentPath ?? current.url.lastPathComponent); session = current.parent
+            var components: [Breadcrumb]
+            if let parent = archive.returnLocation?.archive, let memberPath = archive.session.parentPath {
+                // Search may have opened this archive from a different folder in its parent.
+                components = BrowserLocation.archive(parent, ArchivePath.parent(of: memberPath)).breadcrumbs
+            } else {
+                components = fileComponents(archive.session.rootURL.deletingLastPathComponent())
             }
-            return fileComponents(archive.session.rootURL) +
-                members.reversed().flatMap { $0.split(separator: "/").map(String.init) } + prefix.split(separator: "/").map(String.init)
+            components.append(Breadcrumb(title: archive.url.lastPathComponent, location: .archive(archive, "")))
+            var folder = ""
+            for name in prefix.split(separator: "/") {
+                folder = folder.isEmpty ? String(name) : folder + "/" + String(name)
+                components.append(Breadcrumb(title: String(name), location: .archive(archive, folder)))
+            }
+            return components
         }
     }
 }
@@ -82,15 +98,17 @@ struct BrowserRow {
         }
     }
     var type: String {
-        if isLink { return "Link" }
-        if isDirectory { return "Folder" }
+        if isLink { return L10n.tr("Link") }
+        if isDirectory { return L10n.tr("Folder") }
         let ext = (name as NSString).pathExtension.uppercased()
-        return ext.isEmpty ? "File" : ext + " file"
+        return ext.isEmpty ? L10n.tr("File") : L10n.tr("\(ext) file")
     }
     init(entry: ArchiveEntry) {
         name = entry.name; path = entry.path; url = nil; member = entry
         isDirectory = entry.isDirectory; isLink = entry.isLink; size = entry.size
-        packedSize = entry.packedSize; modified = String(entry.modified.prefix(19))
+        packedSize = entry.packedSize
+        modified = entry.modifiedNS.map { UIFormat.date.string(from: Date(timeIntervalSince1970: Double($0) / 1e9)) }
+            ?? String(entry.modified.prefix(19))
     }
     init(url: URL, values: URLResourceValues) {
         self.url = url; name = url.lastPathComponent; path = url.path; member = nil
@@ -108,7 +126,7 @@ enum UIFormat {
         }
     }
     static let date: DateFormatter = {
-        let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"; return formatter
+        let formatter = DateFormatter(); formatter.dateStyle = .medium; formatter.timeStyle = .short; return formatter
     }()
     static func bytes(_ count: UInt64?) -> String {
         guard let count = count else { return "—" }
@@ -118,20 +136,20 @@ enum UIFormat {
     static func error(_ error: Error) {
         if case FMError.cancelled = error { return }
         let alert = NSAlert(); alert.alertStyle = .warning
-        alert.messageText = "Operation could not be completed"
+        alert.messageText = L10n.tr("Operation could not be completed")
         alert.informativeText = String(error.localizedDescription.prefix(5000))
-        alert.addButton(withTitle: "OK"); alert.runModal()
+        alert.addButton(withTitle: L10n.tr("OK")); alert.runModal()
     }
-    static func confirm(_ title: String, _ message: String, action: String = "Continue") -> Bool {
+    static func confirm(_ title: String, _ message: String, action: String = L10n.tr("Continue")) -> Bool {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = message
-        alert.addButton(withTitle: action); alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: action); alert.addButton(withTitle: L10n.tr("Cancel"))
         return alert.runModal() == .alertFirstButtonReturn
     }
     static func prompt(_ title: String, message: String = "", value: String = "", secure: Bool = false) -> String? {
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = message
         let field: NSTextField = secure ? NSSecureTextField() : NSTextField()
         field.frame = NSRect(x: 0, y: 0, width: 420, height: 26); field.stringValue = value
-        alert.accessoryView = field; alert.addButton(withTitle: "OK"); alert.addButton(withTitle: "Cancel")
+        alert.accessoryView = field; alert.addButton(withTitle: L10n.tr("OK")); alert.addButton(withTitle: L10n.tr("Cancel"))
         alert.window.initialFirstResponder = field
         guard alert.runModal() == .alertFirstButtonReturn else { return nil }
         return field.stringValue
@@ -168,7 +186,7 @@ final class ActionButton: NSButton {
 
 final class PathInput: NSView {
     let field = NSTextField()
-    let button = NSButton(title: "Browse…", target: nil, action: nil)
+    let button = NSButton(title: L10n.tr("Browse…"), target: nil, action: nil)
     let saving: Bool
     init(path: String, saving: Bool) {
         self.saving = saving
@@ -202,7 +220,8 @@ final class PathInput: NSView {
 final class FormView: NSView {
     override var isFlipped: Bool { true }
     private var nextY: CGFloat = 0
-    private let labelWidth: CGFloat
+    private var labelWidth: CGFloat
+    private var rows: [(NSTextField, NSView)] = []
     init(width: CGFloat = 585, labelWidth: CGFloat = 142) {
         self.labelWidth = labelWidth
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: 0))
@@ -211,8 +230,15 @@ final class FormView: NSView {
     func row(_ title: String, _ control: NSView, height: CGFloat = 34) {
         let y = nextY
         let label = NSTextField(labelWithString: title)
+        labelWidth = max(labelWidth, min(ceil(label.fittingSize.width), floor(frame.width * 0.45)))
         label.alignment = .right; label.frame = NSRect(x: 0, y: y + 5, width: labelWidth, height: 22)
-        control.frame = NSRect(x: labelWidth + 12, y: y, width: frame.width - labelWidth - 13, height: height - 6)
+        control.frame = NSRect(x: 0, y: y, width: frame.width, height: height - 6)
+        rows.append((label, control))
+        for (rowLabel, rowControl) in rows {
+            rowLabel.frame.size.width = labelWidth
+            let leading: CGFloat = rowLabel.stringValue.isEmpty ? 0 : labelWidth + 12
+            rowControl.frame.origin.x = leading; rowControl.frame.size.width = frame.width - leading - 1
+        }
         addSubview(label); addSubview(control); nextY += height; frame.size.height = nextY
     }
 }

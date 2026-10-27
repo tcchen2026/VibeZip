@@ -1,6 +1,5 @@
 #if os(macOS)
 import AppKit
-import SwiftUI
 import VibeZipCore
 
 final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolbarItemValidation, NSWindowDelegate, NSMenuItemValidation {
@@ -17,19 +16,19 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private(set) var usesTwoPanes = false
     private(set) var browserLayout: BrowserWindowLayout?
     private(set) var isBusy = false { didSet { window?.toolbar?.validateVisibleItems(); browserLayout?.refresh() } }
-    private var shortcutWindow: NSWindowController?
     private var viewPicker: NSSegmentedControl?
     private var searchItem: NSSearchToolbarItem?
     var onIdle: (() -> Void)?
     private var currentToken: CancellationToken?
+    private var settingsCleanupToken: CancellationToken?
     private var progressWindow: OperationProgressWindow?
-    private var lastLog = "No operations yet."
+    private var lastLog = L10n.tr("No operations yet.")
     private var auxiliaryWindows: [NSWindowController] = []
     private var temporaryFiles: [ScratchDirectory] = []
     var activePane: PaneController { usesTwoPanes ? (focusedPane ?? left) : left }
     var panes: [PaneController] { [left, right] }
     var keepBackups: Bool { UserDefaults.standard.bool(forKey: "keepBackups") }
-    var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 }
+    var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 || settingsCleanupToken != nil }
     var canAcceptCommands: Bool { !isBusy && window?.attachedSheet == nil && NSApp.modalWindow == nil }
 
     init(service: ArchiveService) {
@@ -69,8 +68,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     func updateTitle() {
         let name = activePane.location.archive?.url.lastPathComponent ?? activePane.suggestedDirectory?.lastPathComponent
-        window?.title = name.map { "VibeZip — " + $0 } ?? "VibeZip"
-        window?.subtitle = activePane.location.archive.map { $0.listing.format.uppercased() + " archive" } ?? "Archive manager"
+        window?.title = name.map { "VibeZip - " + $0 } ?? "VibeZip"
         if let directory = activePane.location.directory { directoryAccess.remember(directory) }
         window?.toolbar?.validateVisibleItems()
         browserLayout?.refresh()
@@ -87,7 +85,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         let defaults = UserDefaults.standard
         let configuredLimit = max(1, min(100_000, defaults.integer(forKey: "extractionLimitGiB")))
         service.extractionLimit = UInt64(configuredLimit) * 1024 * 1024 * 1024
-        left.updateKeyTips()
         panes.forEach { $0.refresh() }
     }
     func perform<T>(_ title: String, showCompletion: Bool = true, work: @escaping (CancellationToken, @escaping (String) -> Void) throws -> T,
@@ -125,13 +122,13 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 self.isBusy = false; self.currentToken = nil; pane.status.finish()
                 switch result {
                 case .success(let value):
-                    self.lastLog += "\nCompleted."
-                    if showCompletion { pane.status.showMessage(title + " completed.") }
+                    self.lastLog += L10n.tr("\nCompleted.")
+                    if showCompletion { pane.status.showMessage(L10n.tr("\(title) completed.")) }
                     success(value)
                 case .failure(let error):
                     self.lastLog += "\n" + error.localizedDescription
                     if case FMError.cancelled = error {
-                        pane.status.showMessage("Cancelled. Completed file copies are kept.")
+                        pane.status.showMessage(L10n.tr("Cancelled. Completed file copies are kept."))
                     } else if let failure = failure { failure(error) } else { self.reportError(error) }
                 }
                 self.updateTitle()
@@ -140,7 +137,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             }
         }
     }
-    @objc func cancelCurrent(_ sender: Any?) { (operationPane ?? activePane).status.cancelJob() }
+    @objc func cancelCurrent(_ sender: Any?) {
+        if let token = settingsCleanupToken { token.cancel() }
+        else { (operationPane ?? activePane).status.cancelJob() }
+    }
     func reportError(_ error: Error) {
         if case FMError.cancelled = error { return }
         if !lastLog.hasSuffix(error.localizedDescription) { lastLog += "\n" + error.localizedDescription }
@@ -154,7 +154,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         while let session = current { chain.append(session); current = session.parent }
         for session in chain.reversed() {
             if !(force && session === archive.session) && (session.password != nil || (!session.listing.hasEncryptedHeaders && !session.listing.entries.contains(where: \.isEncrypted))) { continue }
-            guard let password = UIFormat.prompt("Archive password", message: session.displayPath, secure: true) else { return false }
+            guard let password = UIFormat.prompt(L10n.tr("Archive password"), message: session.displayPath, secure: true) else { return false }
             session.password = password
         }
         return true
@@ -173,7 +173,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 var current: ArchiveSession? = archive.session
                 while let session = current {
                     if session.url == url {
-                        if let password = UIFormat.prompt("Archive password", message: session.displayPath, secure: true) {
+                        if let password = UIFormat.prompt(L10n.tr("Archive password"), message: session.displayPath, secure: true) {
                             session.password = password; retry()
                         }
                         return
@@ -192,17 +192,17 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             guard acceptUserSelectedURLs([url]) else { return }
         } else if !directoryAccess.canReadFile(url), !ensureFolderAccess(url) { return }
         var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { reportError(FMError.message("Path does not exist: \(url.path)")); return }
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { reportError(FMError.message(L10n.tr("Path does not exist: \(url.path)"))); return }
         if isDirectory.boolValue { pane.navigate(.directory(url.standardizedFileURL)); return }
         openArchive(url, in: pane, afterOpen: afterOpen)
     }
     private func openArchive(_ url: URL, in pane: PaneController, password: String? = nil,
                              afterOpen: ((ArchiveContext) -> Void)? = nil) {
         guard FileManager.default.isReadableFile(atPath: url.path) else {
-            reportError(FMError.message("This file cannot be read. Check its permissions and try again.")); return
+            reportError(FMError.message(L10n.tr("This file cannot be read. Check its permissions and try again."))); return
         }
         let service = self.service
-        perform("Open archive", showCompletion: false, work: { token, _ in try service.open(url, password: password, token: token) }, success: { [weak self, weak pane] session in
+        perform(L10n.tr("Open archive"), showCompletion: false, work: { token, _ in try service.open(url, password: password, token: token) }, success: { [weak self, weak pane] session in
             guard let self = self, let pane = pane else { return }
             let context = ArchiveContext(session: session)
             pane.navigate(.archive(context, "")); self.activate(pane)
@@ -214,7 +214,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 if self.directoryAccess.allows(parent) { self.reportError(error) }
                 else if self.ensureFolderAccess(parent) { self.openArchive(url, in: pane, password: password, afterOpen: afterOpen) }
             } else if case FMError.passwordRequired = error {
-                guard let password = UIFormat.prompt("Archive password", message: url.lastPathComponent, secure: true) else { return }
+                guard let password = UIFormat.prompt(L10n.tr("Archive password"), message: url.lastPathComponent, secure: true) else { return }
                 self.openArchive(url, in: pane, password: password, afterOpen: afterOpen)
             } else {
                 self.cannotOpenArchive(url.lastPathComponent, reveal: url, nested: false) { [weak self] in
@@ -226,7 +226,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private func openNested(_ row: BrowserRow, in pane: PaneController, password: String? = nil) {
         guard let parent = pane.location.archive, let index = row.member?.index, obtainPassword(parent) else { return }
         let previous = pane.location; let service = self.service
-        perform("Open nested archive", showCompletion: false, work: { token, _ in
+        perform(L10n.tr("Open nested archive"), showCompletion: false, work: { token, _ in
             try service.openNested(in: parent.session, index: index, password: password, token: token)
         }, success: { [weak self, weak pane] session in
             guard let self = self, let pane = pane else { return }
@@ -241,7 +241,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 return
             }
             if case FMError.passwordRequired = error {
-                guard let password = UIFormat.prompt("Archive password", message: row.name, secure: true) else { return }
+                guard let password = UIFormat.prompt(L10n.tr("Archive password"), message: row.name, secure: true) else { return }
                 self.openNested(row, in: pane, password: password)
             } else {
                 self.cannotOpenArchive(row.name, reveal: parent.session.rootURL, nested: true) { [weak self, weak pane] in
@@ -253,10 +253,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private func cannotOpenArchive(_ name: String, reveal url: URL, nested: Bool, preview: @escaping () -> Void) {
         guard let window = window else { return }
         let alert = NSAlert(); alert.alertStyle = .informational
-        alert.messageText = "This doesn't seem to be an archive"
-        alert.informativeText = "“\(name)” isn't an archive type VibeZip recognizes. Would you like to preview this file?" +
-            (nested ? "\n\nReveal in Finder will show the containing archive." : "")
-        alert.addButton(withTitle: "Preview"); alert.addButton(withTitle: "Reveal in Finder"); alert.addButton(withTitle: "Cancel")
+        alert.messageText = L10n.tr("This doesn't seem to be an archive")
+        alert.informativeText = L10n.tr("“\(name)” isn't an archive type VibeZip recognizes. Would you like to preview this file?") +
+            (nested ? L10n.tr("\n\nReveal in Finder will show the containing archive.") : "")
+        alert.addButton(withTitle: L10n.tr("Preview")); alert.addButton(withTitle: L10n.tr("Reveal in Finder")); alert.addButton(withTitle: L10n.tr("Cancel"))
         alert.buttons[2].keyEquivalent = "\u{1b}"
         alert.beginSheetModal(for: window) { [weak self] response in
             // Start preview after the sheet has detached, before draining queued open requests.
@@ -271,7 +271,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard canAcceptCommands else { return }
         defer { onIdle?() }
         let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = true
-        panel.directoryURL = activePane.suggestedDirectory; panel.title = "Choose Folder or Archive"; panel.prompt = "Browse"
+        panel.directoryURL = activePane.suggestedDirectory; panel.title = L10n.tr("Choose Folder or Archive"); panel.prompt = L10n.tr("Browse")
         if panel.runModal() == .OK, let url = panel.url { openURL(url, in: activePane, userSelected: true) }
     }
     @objc func chooseFolder(_ sender: Any?) {
@@ -315,12 +315,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard let archive = pane.location.archive, obtainPassword(archive) else { return }
         let service = self.service
         let retry = { [weak self, weak pane] in guard let self = self, let pane = pane else { return }; self.materialize(row, in: pane, completion: completion) }
-        perform("Extract selected file", showCompletion: false, work: { token, output in
+        perform(L10n.tr("Extract selected file"), showCompletion: false, work: { token, output in
             let scratch = try ScratchDirectory(label: "open")
             try service.extract(archive.url, paths: [row.path], indices: row.member?.index.map { [$0] }, to: scratch.url, layout: .relativeTo(ArchivePath.parent(of: row.path)),
                 password: archive.password, token: token, output: output)
             return (scratch.url.appendingPathComponent(row.name), scratch)
-        }, success: { [weak self] value in self?.temporaryFiles.append(value.1); completion(value.0, value.1) }, failure: archiveFailure(archive, retry: retry))
+        }, success: { value in completion(value.0, value.1) }, failure: archiveFailure(archive, retry: retry))
     }
     @objc func previewSelected(_ sender: Any?) {
         guard canAcceptCommands, activePane.selectedRows.count == 1,
@@ -329,14 +329,15 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     private func preview(_ row: BrowserRow, in pane: PaneController) {
         guard canAcceptCommands, !row.isDirectory else { return }
-        materialize(row, in: pane) { [weak self] url, _ in self?.previewFile(url, name: row.name) }
+        materialize(row, in: pane) { [weak self] url, scratch in self?.previewFile(url, name: row.name, temporaryFile: scratch) }
     }
-    private func previewFile(_ url: URL, name: String) {
-        perform("Prepare preview", showCompletion: false, work: { token, _ in
+    private func previewFile(_ url: URL, name: String, temporaryFile: ScratchDirectory? = nil) {
+        perform(L10n.tr("Prepare preview"), showCompletion: false, work: { token, _ in
+            defer { withExtendedLifetime(temporaryFile) {} }
             let fingerprint = try FileFingerprint(url)
             let content = try LocalPreview.load(url, token: token)
             try token.check()
-            guard try FileFingerprint(url) == fingerprint else { throw FMError.message("The file changed while preparing its preview.") }
+            guard try FileFingerprint(url) == fingerprint else { throw FMError.message(L10n.tr("The file changed while preparing its preview.")) }
             return content
         }, success: { [weak self] content in
             guard let self = self else { return }
@@ -351,9 +352,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     @objc func addArchive(_ sender: Any?) {
         guard canAcceptCommands, let directory = activePane.suggestedDirectory else { return }
         if let archive = activePane.location.archive {
-            guard archive.canModify else { reportError(FMError.message("This archive or its containing archive is read only. Extract it to edit a separate copy.")); return }
+            guard archive.canModify else { reportError(FMError.message(L10n.tr("This archive or its containing archive is read only. Extract it to edit a separate copy."))); return }
             let panel = NSOpenPanel(); panel.allowsMultipleSelection = true; panel.canChooseDirectories = true; panel.canChooseFiles = true
-            panel.title = "Choose files to add"; panel.directoryURL = activePane.suggestedDirectory
+            panel.title = L10n.tr("Choose files to add"); panel.directoryURL = activePane.suggestedDirectory
             if panel.runModal() == .OK, acceptUserSelectedURLs(panel.urls) { addSources(panel.urls, to: archive, prefix: activePane.location.prefix) }
         } else {
             var urls = activePane.selectedURLs
@@ -362,20 +363,20 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 panel.directoryURL = activePane.suggestedDirectory
                 guard panel.runModal() == .OK, acceptUserSelectedURLs(panel.urls) else { return }; urls = panel.urls
             }
-            let base = urls.count == 1 ? urls[0].deletingPathExtension().lastPathComponent : "Archive"
+            let base = urls.count == 1 ? urls[0].deletingPathExtension().lastPathComponent : L10n.tr("Archive")
             let suggested = directory.appendingPathComponent(base + ".7z")
             guard let (archive, options) = CompressionDialog(suggestedURL: suggested).run(count: urls.count) else { return }
             guard ensureFolderAccess(archive.deletingLastPathComponent()) else { return }
             let service = self.service
-            perform("Create archive", work: { token, output in try service.create(urls, output: archive, options: options, token: token, progress: output) },
+            perform(L10n.tr("Create archive"), work: { token, output in try service.create(urls, output: archive, options: options, token: token, progress: output) },
                 success: { [weak self] _ in self?.refreshFilePanes() })
         }
     }
     private func addSources(_ urls: [URL], to archive: ArchiveContext, prefix: String) {
         guard archive.canModify, !urls.isEmpty else { return }
-        guard UIFormat.confirm("Add to archive", "\(urls.count) items → \(archive.url.lastPathComponent)/\(prefix)\nExisting entries with the same paths will be updated.", action: "Add") else { return }
+        guard UIFormat.confirm(L10n.tr("Add to archive"), L10n.tr("\(urls.count) items → \(archive.url.lastPathComponent)/\(prefix)\nExisting entries with the same paths will be updated."), action: L10n.tr("Add")) else { return }
         let service = self.service; let backup = keepBackups
-        mutateJob("Update archive", archive: archive) { token, output in
+        mutateJob(L10n.tr("Update archive"), archive: archive) { token, output in
             try service.add(urls, to: archive.url, prefix: prefix, password: archive.password, backup: backup, token: token, output: output)
         }
     }
@@ -390,7 +391,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         }, success: { [weak self] _, listing in
             guard let self = self else { return }
             if let listing = listing { self.updateContexts(archive.url, listing: listing) }
-            else { self.activePane.status.showMessage("Changes saved. Refresh to reload the archive.") }
+            else { self.activePane.status.showMessage(L10n.tr("Changes saved. Refresh to reload the archive.")) }
             self.refreshFilePanes()
         }, failure: archiveFailure(archive, retry: { [weak self] in self?.mutateJob(title, archive: archive, operation: operation) }))
     }
@@ -414,7 +415,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     private func extractJob(_ archive: ArchiveContext, paths: [String], indices: [UInt32]?, request: ExtractionRequest) {
         let service = self.service
-        perform("Extract files", work: { token, output in
+        perform(L10n.tr("Extract files"), work: { token, output in
             try service.extract(archive.url, paths: paths, indices: indices, to: request.destination, layout: request.layout, policy: request.policy,
                 password: archive.password, token: token, output: output)
         }, success: { [weak self] _ in
@@ -430,7 +431,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard obtainPassword(archive) else { return }
         let service = self.service
         let paths = archive.listing.selected(activePane.selectedPaths).map(\.path)
-        perform("Test archive", showCompletion: false,
+        perform(L10n.tr("Test archive"), showCompletion: false,
             work: { token, output in try service.test(archive.url, password: archive.password, paths: paths, token: token, output: output) },
             success: { [weak self] report in self?.showTestResult(archive, message: report.output, failed: false) },
             failure: archiveFailure(archive, retry: { [weak self] in self?.testArchive(nil) }, terminalFailure: { [weak self] error in
@@ -440,10 +441,10 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private func showTestResult(_ archive: ArchiveContext, message: String, failed: Bool) {
         guard let window = window else { return }
         let alert = NSAlert(); alert.alertStyle = failed ? .warning : .informational
-        alert.messageText = failed ? "Test failed" : "Test passed"
+        alert.messageText = failed ? L10n.tr("Test failed") : L10n.tr("Test passed")
         alert.informativeText = archive.url.lastPathComponent + "\n\n" + String(message.prefix(2000))
-        alert.addButton(withTitle: "OK")
-        if failed { alert.addButton(withTitle: "Details…") }
+        alert.addButton(withTitle: L10n.tr("OK"))
+        if failed { alert.addButton(withTitle: L10n.tr("Details…")) }
         alert.beginSheetModal(for: window) { [weak self] response in
             if response == .alertSecondButtonReturn { self?.showLastLog(nil) }
             self?.window?.toolbar?.validateVisibleItems(); self?.onIdle?()
@@ -455,7 +456,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         let archives = panes.compactMap { $0.location.archive }.filter { seen.insert($0.id).inserted }
         if archives.isEmpty { refreshFilePanes(); return }
         let service = self.service
-        perform("Refresh archive", showCompletion: false, work: { token, _ in
+        perform(L10n.tr("Refresh archive"), showCompletion: false, work: { token, _ in
             try archives.map { ($0.url, try service.list($0.url, password: $0.password, token: token)) }
         }, success: { [weak self] values in
             for (url, listing) in values { self?.updateContexts(url, listing: listing) }; self?.refreshFilePanes()
@@ -463,36 +464,36 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     @objc func renameSelected(_ sender: Any?) {
         guard !isBusy, activePane.selectedRows.count == 1, let row = activePane.selectedRows.first else { return }
-        guard let name = UIFormat.prompt("Rename", value: row.name), name != row.name else { return }
+        guard let name = UIFormat.prompt(L10n.tr("Rename"), value: row.name), name != row.name else { return }
         do { try ArchivePath.validateName(name) } catch { reportError(error); return }
         if let url = row.url {
             let destination = url.deletingLastPathComponent().appendingPathComponent(name)
-            perform("Rename", work: { _, _ in
-                guard !SafeFileSystem.exists(destination) else { throw FMError.message("The destination name already exists.") }
+            perform(L10n.tr("Rename"), work: { _, _ in
+                guard !SafeFileSystem.exists(destination) else { throw FMError.message(L10n.tr("The destination name already exists.")) }
                 try FileManager.default.moveItem(at: url, to: destination)
             }, success: { [weak self] _ in self?.refreshFilePanes() })
         } else if let archive = activePane.location.archive {
             let parent = ArchivePath.parent(of: row.path); let path = (parent.isEmpty ? "" : parent + "/") + name
             let service = self.service; let backup = keepBackups
-            mutateJob("Rename archive entry", archive: archive) { token, output in
+            mutateJob(L10n.tr("Rename archive entry"), archive: archive) { token, output in
                 try service.rename(row.path, to: path, in: archive.url, password: archive.password, backup: backup, token: token, output: output)
             }
         }
     }
     @objc func newFolder(_ sender: Any?) {
-        guard !isBusy, let name = UIFormat.prompt("New Folder", value: "New Folder") else { return }
+        guard !isBusy, let name = UIFormat.prompt(L10n.tr("New Folder"), value: L10n.tr("New Folder")) else { return }
         do { try ArchivePath.validateName(name) } catch { reportError(error); return }
         if let directory = activePane.location.directory {
             do {
                 let url = directory.appendingPathComponent(name)
-                guard !SafeFileSystem.exists(url) else { throw FMError.message("An item with this name already exists.") }
+                guard !SafeFileSystem.exists(url) else { throw FMError.message(L10n.tr("An item with this name already exists.")) }
                 try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false); refreshFilePanes()
             } catch { reportError(error) }
         } else if let archive = activePane.location.archive {
             let prefix = activePane.location.prefix; let service = self.service; let backup = keepBackups
             let path = (prefix.isEmpty ? "" : prefix + "/") + name
-            guard !archive.listing.entries.contains(where: { ArchivePath.isWithin($0.path, parent: path) }) else { reportError(FMError.message("An item with this name already exists.")); return }
-            mutateJob("Create folder in archive", archive: archive) { token, output in
+            guard !archive.listing.entries.contains(where: { ArchivePath.isWithin($0.path, parent: path) }) else { reportError(FMError.message(L10n.tr("An item with this name already exists."))); return }
+            mutateJob(L10n.tr("Create folder in archive"), archive: archive) { token, output in
                 let scratch = try ScratchDirectory(label: "mkdir"); let directory = scratch.url.appendingPathComponent(name)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
                 return try service.add([directory], to: archive.url, prefix: prefix, password: archive.password, backup: backup, token: token, output: output)
@@ -506,15 +507,15 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard NSApp.keyWindow === window, !isBusy, !activePane.selectedRows.isEmpty else { return }
         let rows = activePane.selectedRows
         if let archive = activePane.location.archive {
-            guard archive.canModify, UIFormat.confirm("Delete \(rows.count) items from the archive?", "All contents of the selected folders will also be deleted." + (keepBackups ? "\nA backup of the original archive will be kept." : "\nArchive backups are currently disabled."), action: "Delete") else { return }
+            guard archive.canModify, UIFormat.confirm(L10n.tr("Delete \(rows.count) items from the archive?"), L10n.tr("All contents of the selected folders will also be deleted.") + (keepBackups ? L10n.tr("\nA backup of the original archive will be kept.") : L10n.tr("\nArchive backups are currently disabled.")), action: L10n.tr("Delete")) else { return }
             let service = self.service; let backup = keepBackups
-            mutateJob("Delete from archive", archive: archive) { token, output in
+            mutateJob(L10n.tr("Delete from archive"), archive: archive) { token, output in
                 try service.delete(rows.map(\.path), from: archive.url, password: archive.password, backup: backup, token: token, output: output)
             }
         } else {
             let urls = rows.compactMap(\.url)
-            guard UIFormat.confirm("Move to Trash?", "\(urls.count) items and their contents will be moved to Trash.", action: "Move to Trash") else { return }
-            perform("Move to Trash", work: { token, output in
+            guard UIFormat.confirm(L10n.tr("Move to Trash?"), L10n.tr("\(urls.count) items and their contents will be moved to Trash."), action: L10n.tr("Move to Trash")) else { return }
+            perform(L10n.tr("Move to Trash"), work: { token, output in
                 for url in urls { try token.check(); try FileManager.default.trashItem(at: url, resultingItemURL: nil); output(url.path + "\n") }
             }, success: { [weak self] _ in self?.refreshFilePanes() })
         }
@@ -525,7 +526,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard !isBusy, !activePane.selectedRows.isEmpty else { return }
         let other = activePane === left ? right : left
         guard let suggested = (usesTwoPanes ? other.location.directory : nil) ?? activePane.suggestedDirectory,
-              let (directory, policy) = Dialogs.destination(title: move ? "Move To…" : "Copy To…", suggested: suggested),
+              let (directory, policy) = Dialogs.destination(title: move ? L10n.tr("Move To…") : L10n.tr("Copy To…"), suggested: suggested),
               ensureFolderAccess(directory) else { return }
         let pane = activePane
         if let archive = pane.location.archive {
@@ -533,13 +534,13 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             if move && !ensureFolderAccess(archive.session.rootURL.deletingLastPathComponent()) { return }
             let paths = pane.selectedPaths; let indices = pane.selectedArchiveIndices
             let prefix = pane.location.prefix; let service = self.service; let backup = keepBackups
-            perform(move ? "Move from archive" : "Copy from archive", work: { token, output -> ArchiveListing? in
+            perform(move ? L10n.tr("Move from archive") : L10n.tr("Copy from archive"), work: { token, output -> ArchiveListing? in
                 let before = try FileFingerprint(archive.session.rootURL)
                 let report = try service.extract(archive.url, paths: paths, indices: indices, to: directory, layout: .relativeTo(prefix), policy: policy,
                     password: archive.password, token: token, output: output)
                 if move {
-                    guard report.skipped == 0 else { throw FMError.message("Some files were skipped. All original archive entries have been kept, along with the files already copied.") }
-                    guard try FileFingerprint(archive.session.rootURL) == before else { throw FMError.message("The archive changed after copying. The original entries were kept.") }
+                    guard report.skipped == 0 else { throw FMError.message(L10n.tr("Some files were skipped. All original archive entries have been kept, along with the files already copied.")) }
+                    guard try FileFingerprint(archive.session.rootURL) == before else { throw FMError.message(L10n.tr("The archive changed after copying. The original entries were kept.")) }
                     _ = try service.delete(paths, from: archive.url, password: archive.password, backup: backup, token: token, output: output)
                     return try? service.list(archive.url, password: archive.password, token: token)
                 }
@@ -550,7 +551,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         } else { transferFiles(pane.selectedURLs, to: directory, policy: policy, move: move) }
     }
     private func transferFiles(_ urls: [URL], to directory: URL, policy: ConflictPolicy, move: Bool) {
-        perform(move ? "Move files" : "Copy files", work: { token, output in
+        perform(move ? L10n.tr("Move files") : L10n.tr("Copy files"), work: { token, output in
             try FileOperations.copy(urls, to: directory, move: move, policy: policy, token: token, output: output)
         }, success: { [weak self] _ in self?.refreshFilePanes() })
     }
@@ -565,7 +566,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         if pane.location.directory != nil { completion(rows.compactMap(\.url)); return }
         guard let archive = pane.location.archive, obtainPassword(archive) else { return }
         let service = self.service; let prefix = pane.location.prefix; let indices = pane.selectedArchiveIndices
-        perform("Extract selected items", work: { token, output in
+        perform(L10n.tr("Extract selected items"), work: { token, output in
             let scratch = try ScratchDirectory(label: "selection")
             try service.extract(archive.url, paths: rows.map(\.path), indices: indices, to: scratch.url, layout: .relativeTo(prefix),
                 password: archive.password, token: token, output: output)
@@ -600,7 +601,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         if let archive = activePane.location.archive { addSources(urls, to: archive, prefix: activePane.location.prefix) }
         else if let directory = activePane.location.directory {
             let move = NSPasteboard.general.string(forType: NSPasteboard.PasteboardType("org.vibezip.cut")) == "move"
-            if move && !UIFormat.confirm("Move files from the clipboard?", "Source files will be removed after copying. Name conflicts will be resolved by renaming the new files.", action: "Move") { return }
+            if move && !UIFormat.confirm(L10n.tr("Move files from the clipboard?"), L10n.tr("Source files will be removed after copying. Name conflicts will be resolved by renaming the new files."), action: L10n.tr("Move")) { return }
             transferFiles(urls, to: directory, policy: .rename, move: move)
             // Clear move intent immediately; a second paste should never move files twice.
             if move { NSPasteboard.general.clearContents() }
@@ -616,8 +617,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         let algorithm = (sender as? NSMenuItem)?.representedObject as? String ?? "SHA256"
         materializeSelection(activePane) { [weak self] urls in
             guard let self = self else { return }; let service = self.service
-            self.perform("Calculate " + algorithm, work: { token, output in try service.hash(urls, algorithm: algorithm, token: token, output: output) },
-                success: { [weak self] result in self?.showText(algorithm + " Checksums", result.output) })
+            self.perform(L10n.tr("Calculate \(algorithm)"), work: { token, output in try service.hash(urls, algorithm: algorithm, token: token, output: output) },
+                success: { [weak self] result in self?.showText(L10n.tr("\(algorithm) Checksums"), result.output) })
         }
     }
     @objc func properties(_ sender: Any?) {
@@ -635,19 +636,6 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         if usesTwoPanes && canAcceptCommands { activate(activePane === left ? right : left) }
     }
     @objc func togglePlaces(_ sender: Any?) { browserLayout?.togglePlaces() }
-    @objc func toggleKeyTips(_ sender: Any?) {
-        UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: "showKeyTips"), forKey: "showKeyTips")
-        left.updateKeyTips()
-    }
-    @objc func showShortcuts(_ sender: Any?) {
-        if shortcutWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: ShortcutMapView()))
-            window.styleMask = [.titled, .closable]; window.title = "Shortcut Map"
-            window.isReleasedWhenClosed = false; window.center()
-            shortcutWindow = NSWindowController(window: window)
-        }
-        shortcutWindow?.showWindow(nil)
-    }
     @objc func changeViewStyle(_ sender: Any?) {
         let index = (sender as? NSSegmentedControl)?.selectedSegment ?? (sender as? NSMenuItem)?.tag ?? 2
         guard let style = BrowserViewStyle(rawValue: index) else { return }
@@ -676,45 +664,45 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private func editPreferences(folderAccess: Bool) {
         guard canAcceptCommands, !hasActiveOperations else { return }
         defer { onIdle?() }
-        let changed = Dialogs.preferences(folderAccess: folderAccess)
+        let changed = Dialogs.preferences(folderAccess: folderAccess) { [weak self] token in self?.settingsCleanupToken = token }
         panes.forEach { $0.discardRevokedLocations() }
         if changed { applyPreferences() }
     }
     @objc func forgetPasswords(_ sender: Any?) {
         service.forgetPasswords()
-        activePane.status.showMessage("Passwords cleared.")
+        activePane.status.showMessage(L10n.tr("Passwords cleared."))
     }
-    @objc func showLastLog(_ sender: Any?) { showText("Last operation log", lastLog) }
+    @objc func showLastLog(_ sender: Any?) { showText(L10n.tr("Last operation log"), lastLog) }
     @objc func engineInformation(_ sender: Any?) {
-        showText("7-Zip formats", service.engine.formats())
+        showText(L10n.tr("Archive Formats"), service.engine.formats())
     }
     @objc func splitFile(_ sender: Any?) {
         guard !isBusy, activePane.selectedURLs.count == 1, let source = activePane.selectedURLs.first else { return }
-        guard let text = UIFormat.prompt("Split File", message: "Split a file into byte volumes. Enter a size such as 100m or 4g.", value: "100m") else { return }
+        guard let text = UIFormat.prompt(L10n.tr("Split File"), message: L10n.tr("Split a file into byte volumes. Enter a size such as 100m or 4g."), value: "100m") else { return }
         do {
             let value = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard value.range(of: "^[1-9][0-9]*[kmg]?$", options: .regularExpression) != nil else { throw FMError.message("Invalid volume size.") }
+            guard value.range(of: "^[1-9][0-9]*[kmg]?$", options: .regularExpression) != nil else { throw FMError.message(L10n.tr("Invalid volume size.")) }
             let factors: [Character: UInt64] = ["k": 1024, "m": 1024 * 1024, "g": 1024 * 1024 * 1024]
             let factor = value.last.flatMap { factors[$0] } ?? 1
-            guard let amount = UInt64(factor == 1 ? value : String(value.dropLast())) else { throw FMError.message("The volume size is too large.") }
+            guard let amount = UInt64(factor == 1 ? value : String(value.dropLast())) else { throw FMError.message(L10n.tr("The volume size is too large.")) }
             let (bytes, overflow) = amount.multipliedReportingOverflow(by: factor)
-            guard !overflow else { throw FMError.message("The volume size is too large.") }
-            let panel = NSSavePanel(); panel.title = "Choose a base name for the volumes"
+            guard !overflow else { throw FMError.message(L10n.tr("The volume size is too large.")) }
+            let panel = NSSavePanel(); panel.title = L10n.tr("Choose a base name for the volumes")
             panel.directoryURL = source.deletingLastPathComponent(); panel.nameFieldStringValue = source.lastPathComponent + ".split"
             guard panel.runModal() == .OK, let base = panel.url else { return }
             guard ensureFolderAccess(base.deletingLastPathComponent()) else { return }
-            perform("Split File", work: { token, output in try FileOperations.split(source, to: base, volumeBytes: bytes, token: token, output: output) },
+            perform(L10n.tr("Split File"), work: { token, output in try FileOperations.split(source, to: base, volumeBytes: bytes, token: token, output: output) },
                 success: { [weak self] _ in self?.refreshFilePanes() })
         } catch { reportError(error) }
     }
     @objc func combineFiles(_ sender: Any?) {
         guard !isBusy, let first = activePane.selectedURLs.first, first.pathExtension == "001" else { return }
-        let panel = NSSavePanel(); panel.directoryURL = first.deletingLastPathComponent(); panel.title = "Combine File Volumes"
-        panel.message = "All consecutive volumes must be present, including the last one."
+        let panel = NSSavePanel(); panel.directoryURL = first.deletingLastPathComponent(); panel.title = L10n.tr("Combine File Volumes")
+        panel.message = L10n.tr("All consecutive volumes must be present, including the last one.")
         panel.nameFieldStringValue = "Combined-" + first.deletingPathExtension().lastPathComponent
         guard panel.runModal() == .OK, let destination = panel.url else { return }
         guard ensureFolderAccess(destination.deletingLastPathComponent()) else { return }
-        perform("Combine Files", work: { token, output in try FileOperations.combine(first, to: destination, token: token, output: output) },
+        perform(L10n.tr("Combine Files"), work: { token, output in try FileOperations.combine(first, to: destination, token: token, output: output) },
             success: { [weak self] _ in self?.refreshFilePanes() })
     }
 
@@ -724,31 +712,31 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         directoryAccess.close()
     }
     @objc func showHelp(_ sender: Any?) {
-        let url = Bundle.main.resourceURL?.appendingPathComponent("README.md")
-        let text = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "See macOS/README.md in the source package."
-        showText("VibeZip Help", text)
+        let url = L10n.resourceURL("Help", extension: "txt")
+        let text = url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? L10n.tr("See macOS/README.md in the source package.")
+        showText(L10n.tr("VibeZip Help"), text)
     }
     @objc func showPrivacyPolicy(_ sender: Any?) {
-        let url = Bundle.main.resourceURL?.appendingPathComponent("Privacy.txt")
-        showText("VibeZip Privacy", url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? "The privacy notice is unavailable. Please reinstall VibeZip.")
+        let url = L10n.resourceURL("Privacy", extension: "txt")
+        showText(L10n.tr("VibeZip Privacy"), url.flatMap { try? String(contentsOf: $0, encoding: .utf8) } ?? L10n.tr("The privacy notice is unavailable. Please reinstall VibeZip."))
     }
 
     private var toolbarItems: [(String, String, String, Selector)] {
         [
-            ("sidebar", "Sidebar", "sidebar.left", #selector(togglePlaces)),
-            ("twoPanels", "2 Panels", "rectangle.split.2x1", #selector(toggleTwoPanels)),
-            ("back", "Back", "chevron.left", #selector(goBack)),
-            ("forward", "Forward", "chevron.right", #selector(goForward)),
-            ("up", "Up", "arrow.up", #selector(goUp)),
-            ("add", "Add", "archivebox", #selector(addArchive)),
-            ("extract", "Extract", "square.and.arrow.up.on.square", #selector(extractArchive)),
-            ("test", "Test", "checkmark.seal", #selector(testArchive)),
-            ("copy", "Copy", "doc.on.doc", #selector(copyTo)),
-            ("move", "Move", "folder", #selector(moveTo)),
-            ("delete", "Delete", "trash", #selector(deleteSelected)),
-            ("preview", "Preview", "eye", #selector(previewSelected)),
-            ("info", "Info", "info.circle", #selector(properties)),
-            ("refresh", "Refresh", "arrow.clockwise", #selector(refreshAll)),
+            ("sidebar", L10n.tr("Sidebar"), "sidebar.left", #selector(togglePlaces)),
+            ("twoPanels", L10n.tr("2 Panels"), "rectangle.split.2x1", #selector(toggleTwoPanels)),
+            ("back", L10n.tr("Back"), "chevron.left", #selector(goBack)),
+            ("forward", L10n.tr("Forward"), "chevron.right", #selector(goForward)),
+            ("up", L10n.tr("Up"), "arrow.up", #selector(goUp)),
+            ("add", L10n.tr("Add"), "archivebox", #selector(addArchive)),
+            ("extract", L10n.tr("Extract"), "square.and.arrow.up.on.square", #selector(extractArchive)),
+            ("test", L10n.tr("Test"), "checkmark.seal", #selector(testArchive)),
+            ("copy", L10n.tr("Copy"), "doc.on.doc", #selector(copyTo)),
+            ("move", L10n.tr("Move"), "folder", #selector(moveTo)),
+            ("delete", L10n.tr("Delete"), "trash", #selector(deleteSelected)),
+            ("preview", L10n.tr("Preview"), "eye", #selector(previewSelected)),
+            ("info", L10n.tr("Info"), "info.circle", #selector(properties)),
+            ("refresh", L10n.tr("Refresh"), "arrow.clockwise", #selector(refreshAll)),
         ]
     }
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -763,17 +751,24 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                  willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
         if itemIdentifier.rawValue == "search" {
             let item = NSSearchToolbarItem(itemIdentifier: itemIdentifier)
-            item.searchField = activePane.search; item.label = "Filter"; item.paletteLabel = "Filter"
+            item.searchField = activePane.search; item.label = L10n.tr("Filter"); item.paletteLabel = L10n.tr("Filter")
             item.visibilityPriority = .high; searchItem = item; return item
         }
         if itemIdentifier.rawValue == "viewStyle" {
-            let item = NSToolbarItem(itemIdentifier: itemIdentifier); item.label = "View"; item.paletteLabel = "View"
+            let item = NSToolbarItem(itemIdentifier: itemIdentifier); item.label = L10n.tr("View"); item.paletteLabel = L10n.tr("View")
             let picker = NSSegmentedControl(images: ["square.grid.2x2", "list.bullet", "list.bullet.rectangle"].map {
                 NSImage(systemSymbolName: $0, accessibilityDescription: nil)!
             }, trackingMode: .selectOne, target: self, action: #selector(changeViewStyle))
             picker.selectedSegment = activePane.viewStyle.rawValue
-            for (index, title) in ["Icons", "List", "Details"].enumerated() { picker.setToolTip(title, forSegment: index) }
-            picker.setAccessibilityLabel("File view")
+            for (index, title) in [L10n.tr("Icons"), L10n.tr("List"), L10n.tr("Details")].enumerated() { picker.setToolTip(title, forSegment: index) }
+            picker.setAccessibilityLabel(L10n.tr("File view"))
+            let overflow = NSMenuItem(title: item.label, action: nil, keyEquivalent: "")
+            let modes = NSMenu(title: item.label)
+            for (index, title) in [L10n.tr("Icons"), L10n.tr("List"), L10n.tr("Details")].enumerated() {
+                let choice = menuItem(title, #selector(changeViewStyle)); choice.tag = index
+                modes.addItem(choice)
+            }
+            overflow.submenu = modes; item.menuFormRepresentation = overflow
             item.view = picker; viewPicker = picker; return item
         }
         guard let definition = toolbarItems.first(where: { $0.0 == itemIdentifier.rawValue }) else { return nil }
@@ -796,12 +791,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         for (title, action): (String, Selector) in [
-            ("Open", #selector(openAsArchive)),
-            ("Preview", #selector(previewSelected)),
-            ("Reveal in Finder", #selector(revealInFinder)),
-            ("Extract", #selector(extractArchive)),
-            ("Add to Archive", #selector(addArchive)),
-            ("Info", #selector(properties))
+            (L10n.tr("Open"), #selector(openAsArchive)),
+            (L10n.tr("Preview"), #selector(previewSelected)),
+            (L10n.tr("Reveal in Finder"), #selector(revealInFinder)),
+            (L10n.tr("Extract"), #selector(extractArchive)),
+            (L10n.tr("Add to Archive"), #selector(addArchive)),
+            (L10n.tr("Info"), #selector(properties))
         ] { menu.addItem(menuItem(title, action)) }
         return menu
     }
@@ -825,13 +820,12 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         }
         if menuItem.action == #selector(togglePlaces) { menuItem.state = browserLayout?.placesItem.isCollapsed == false ? .on : .off }
         if menuItem.action == #selector(properties) { menuItem.state = browserLayout?.infoItem.isCollapsed == false ? .on : .off }
-        if menuItem.action == #selector(toggleKeyTips) { menuItem.state = UserDefaults.standard.bool(forKey: "showKeyTips") ? .on : .off }
         if menuItem.action == #selector(changeViewStyle) { menuItem.state = menuItem.tag == activePane.viewStyle.rawValue ? .on : .off }
         if menuItem.action == #selector(toggleTwoPanels) { menuItem.state = usesTwoPanes ? .on : .off }
         return isActionEnabled(menuItem.action)
     }
     private func isActionEnabled(_ action: Selector?) -> Bool {
-        if [#selector(togglePlaces), #selector(toggleKeyTips), #selector(showShortcuts), #selector(properties), #selector(changeViewStyle), #selector(toggleTwoPanels)].contains(action) { return true }
+        if [#selector(togglePlaces), #selector(properties), #selector(changeViewStyle), #selector(toggleTwoPanels)].contains(action) { return true }
         if [#selector(showPreferences), #selector(showFolderAccess)].contains(action) { return !hasActiveOperations }
         if activePane.location.isEmpty {
             return [#selector(chooseOpen), #selector(chooseFolder), #selector(focusAddress), #selector(showHelp), #selector(showPrivacyPolicy),

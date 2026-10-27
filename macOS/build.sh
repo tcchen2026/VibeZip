@@ -71,6 +71,7 @@ fi
 cp "$VIBEZIP_ROOT/Resources/Info.plist" "$VIBEZIP_APP/Contents/Info.plist"
 cp "$VIBEZIP_ROOT/Resources/PrivacyInfo.xcprivacy" "$VIBEZIP_ROOT/Resources/Privacy.txt" "$VIBEZIP_APP/Contents/Resources/"
 cp "$VIBEZIP_ROOT/README.md" "$VIBEZIP_ROOT/Resources/GitHub.svg" "$VIBEZIP_APP/Contents/Resources/"
+cp -R "$VIBEZIP_BIN/VibeZip_VibeZipCore.bundle" "$VIBEZIP_APP/Contents/Resources/"
 cp "$VIBEZIP_ROOT/LICENSE" "$VIBEZIP_APP/Contents/Resources/Licenses/VibeZip-LGPL.txt"
 cp "$VIBEZIP_ROOT/Resources/Licenses/"*.txt "$VIBEZIP_APP/Contents/Resources/Licenses/"
 cp "$VIBEZIP_ROOT/Resources/THIRD_PARTY_NOTICES.txt" "$VIBEZIP_APP/Contents/Resources/Licenses/"

@@ -2,7 +2,9 @@
 
 VibeZip targets Mac App Store distribution with explicit user-selected file
 access. The current app bundle enables App Sandbox, user-selected read/write
-access and app-scoped bookmarks. It requests no network entitlement. See
+access and app-scoped bookmarks. Both `com.apple.security.network.client` and
+`com.apple.security.network.server` are explicitly false, disabling outgoing and
+incoming network access in the app process. See
 [VibeZip.entitlements](../macOS/Resources/VibeZip.entitlements).
 
 The archive engine and built-in preview run in the app process and share this
@@ -75,9 +77,17 @@ interactive PDF actions or external viewers. There is no **Open in Preview**
 button or preference. Opening a file in the browser means attempting to browse
 it as an archive; archive contents are never launched as programs.
 
-Two deliberate external actions remain: **Reveal in Finder** shows a local file
-or the outer archive, and the About badge opens the configured HTTPS GitHub
-project page in the user's browser. Neither is a general external-file opener.
+The explicit Finder actions reveal selected items or show VibeZip's temporary
+folder from Settings. The About button opens the configured HTTPS GitHub project
+page in the user's browser. These controls do not open archive contents in external viewers.
+
+The Settings default-app button asks macOS to associate selected archive content
+types with VibeZip and verifies each reported handler. The `.zip/.7z/.rar` preset
+applies the three types sequentially and stops if a request is declined or fails.
+It uses NSWorkspace's public
+API and system consent; no sandbox exception, startup association change or direct
+Launch Services preference write is introduced. Being a default handler does not
+grant folder access. Files opened from Finder use the existing user-selected-file path.
 
 ## Persistence and cleanup
 
@@ -86,15 +96,34 @@ Passwords live in session memory and can be cleared through the Tools menu or
 by quitting; they are not written to command arguments, preferences or logs.
 This is not a guarantee of cryptographic zeroization of all process memory.
 
-Temporary nested archives and preview files can contain decrypted data. They
-use private directories and are removed during normal cleanup; some materialized
-preview files remain until app cleanup. A crash can leave temporary files behind.
-There is no persistent crash-recovery journal or explicit startup scavenger, and
-cleanup is not secure erasure. User-enabled backups intentionally remain beside
-the original archive.
+Temporary nested archives, previews and extraction copies can contain decrypted
+data. They use mode-0700 directories inside `VibeZip` under the sandbox's temporary
+directory. A scratch owner holds an exclusive directory lock until it releases
+the directory. Preview copies are released once their bounded, in-memory content
+has been loaded; nested sessions and clipboard copies may stay until app cleanup.
+A crash releases the locks but can leave files behind.
+
+Settings → General can show this folder in Finder or clean unused copies.
+Its MB/GB total is a background snapshot of regular-file sizes, including active
+copies, and does not read file contents or follow symbolic links.
+Cleanup only visits matching VibeZip work directories inside this dedicated
+folder and skips locks held by this or another running process. It ignores
+unrelated files and top-level symlinks, and removes links inside a discarded
+directory without following their targets. Cancellation is checked between files.
+It does not sweep the system temporary directory, older builds' temporary folders,
+archive staging beside user files, or backups. There is no persistent crash-recovery
+journal or automatic startup scavenger, and cleanup is not secure erasure.
+
+Sources: [TemporaryFiles.swift](../macOS/Sources/VibeZipCore/TemporaryFiles.swift)
+and [FileOperations.swift](../macOS/Sources/VibeZipCore/FileOperations.swift).
 
 The app has no accounts, analytics or upload feature. Local operation details
 can contain filenames and paths, so they should not be copied into public issues
 without review. Keep the user-facing [Privacy.txt](../macOS/Resources/Privacy.txt)
 and [PrivacyInfo.xcprivacy](../macOS/Resources/PrivacyInfo.xcprivacy) consistent with
 actual behavior when changing this design.
+
+The in-app Privacy window reads the document for the selected app language from
+the shared localization bundle. Its English copy is checked against the source
+privacy notice, and translations describe the same local processing and access
+behavior.

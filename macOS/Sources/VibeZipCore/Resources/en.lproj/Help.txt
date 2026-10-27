@@ -1,0 +1,22 @@
+VibeZip Help
+
+Getting started
+Choose a folder to let VibeZip browse and manage its contents. Saved folders appear in the sidebar. Manage access in Settings > Folder Access.
+
+Browsing
+Double-click a folder to enter it, or a file to open it as an archive. Nested archives open in the same pane. Click an ancestor in the address bar to go there. Click the current location or empty space to edit the address. Back, Forward and Up navigate your locations.
+
+Views and search
+Choose Icons, List or Details in the toolbar. Use 2 Panels to browse two locations. Commands, search and Info follow the active pane. Search filters the current filesystem folder or the entire open archive. It does not read file contents or search inside nested archives.
+
+Working with archives
+Add creates an archive or adds files to the current archive. Extract lets you choose a destination and how to handle existing files. Test checks the archive and shows the result. Copy, Move, Rename and Delete operate on the selected items. Filesystem deletion moves items to Trash; deleting archive entries updates the archive. Long operations show progress and can be cancelled. Completed file copies are kept after cancellation.
+
+Preview and Info
+Preview displays text, images, PDF or hexadecimal data locally. It does not run files or open external viewers. Info shows file and archive details. Reveal in Finder shows a filesystem item, or the containing outer archive for a nested item.
+
+Settings and language
+Settings controls archive backups, hidden files, extraction limits and saved folder access. VibeZip follows your macOS app language: English, Simplified Chinese, Japanese or Korean. Change the language for VibeZip in System Settings > General > Language & Region, then reopen the app.
+
+Temporary files
+Settings > General can show the temporary folder in Finder and clean unused temporary files. Copies needed by open archives or running operations are kept.

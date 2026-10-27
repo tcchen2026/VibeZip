@@ -106,7 +106,7 @@ public final class Engine {
         var pointer: OpaquePointer?; var error = VZError()
         let status = vz_library_open(libraryURL.path, &pointer, &error)
         try nativeCheck(status, &error)
-        guard let pointer = pointer else { throw FMError.message("Cannot load the 7-Zip archive library.") }
+        guard let pointer = pointer else { throw FMError.message(L10n.tr("Cannot load the 7-Zip archive library.")) }
         handle = pointer
     }
     deinit { vz_library_close(handle) }
@@ -124,7 +124,7 @@ public final class Engine {
         #endif
         let bundled = Bundle.main.bundleURL.appendingPathComponent("Contents/Frameworks/" + filename)
         if Bundle.main.bundleURL.pathExtension == "app" {
-            guard FileManager.default.fileExists(atPath: bundled.path) else { throw FMError.message("The bundled archive engine is missing. Please reinstall VibeZip.") }
+            guard FileManager.default.fileExists(atPath: bundled.path) else { throw FMError.message(L10n.tr("The bundled archive engine is missing. Please reinstall VibeZip.")) }
             return bundled
         }
         var candidates: [URL] = []
@@ -137,17 +137,17 @@ public final class Engine {
         candidates.append(root.appendingPathComponent(".build/native/\(architecture)/\(filename)"))
         #endif
         guard let found = candidates.first(where: { FileManager.default.fileExists(atPath: $0.path) }) else {
-            throw FMError.message("The bundled 7-Zip library is missing. Run ./build.sh and open dist/VibeZip.app.")
+            throw FMError.message(L10n.tr("The bundled 7-Zip library is missing. Run ./build.sh and open dist/VibeZip.app."))
         }
         return found
     }
     public static func validatePassword(_ password: String) throws {
         guard password.utf8.count <= 4096, !password.contains("\0") else {
-            throw FMError.message("Passwords cannot contain NUL and must fit within 4,096 UTF-8 bytes.")
+            throw FMError.message(L10n.tr("Passwords cannot contain NUL and must fit within 4,096 UTF-8 bytes."))
         }
     }
     public func formats() -> String {
-        guard let result = vz_library_formats(handle) else { return "No archive formats available." }
+        guard let result = vz_library_formats(handle) else { return L10n.tr("No archive formats available.") }
         defer { vz_string_free(result) }; return String(cString: result)
     }
     func open(_ url: URL, password: String?, token: CancellationToken) throws -> NativeArchive {
@@ -155,7 +155,7 @@ public final class Engine {
             var pointer: OpaquePointer?; var error = VZError()
             let status = vz_archive_open(handle, url.path, callbacks, &pointer, &error)
             try nativeCheck(status, &error)
-            guard let pointer = pointer else { throw FMError.message("Cannot open archive.") }
+            guard let pointer = pointer else { throw FMError.message(L10n.tr("Cannot open archive.")) }
             return NativeArchive(engine: self, handle: pointer)
         }
     }
@@ -221,7 +221,7 @@ final class NativeArchive {
         for index in 0..<info.entry_count {
             if index % 256 == 0 {
                 try token.check()
-                token.report(ArchiveProgress(phase: .open, completed: UInt64(index), total: UInt64(info.entry_count), path: "Reading entries"))
+                token.report(ArchiveProgress(phase: .open, completed: UInt64(index), total: UInt64(info.entry_count), path: L10n.tr("Reading entries")))
             }
             var item = VZEntry()
             let status = vz_archive_entry(handle, index, &item, &error)
@@ -252,7 +252,7 @@ final class NativeArchive {
                 var pointer: OpaquePointer?; var error = VZError()
                 let status = vz_archive_open_nested(handle, index, scratch.path, limit, parentCallbacks, childCallbacks, &pointer, &error)
                 try nativeCheck(status, &error)
-                guard let pointer = pointer else { throw FMError.message("Cannot open nested archive.") }
+                guard let pointer = pointer else { throw FMError.message(L10n.tr("Cannot open nested archive.")) }
                 return NativeArchive(engine: engine, handle: pointer)
             }
         }

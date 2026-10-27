@@ -14,6 +14,9 @@ directly on that stream. Otherwise the bridge extracts that entry to a private
 temporary file and opens the child there. Both routes retain the parent session.
 The stream route avoids a full temporary copy when the format permits it; it
 does not imply every compressed or solid archive can provide random access.
+Once opening succeeds, direct-stream sessions release their unused scratch
+directory. Only a materialized nested archive keeps a temporary directory, also
+when a session is reopened after an update or password reset.
 
 The root session has depth zero; the current guard permits child depths through
 64. A nested entry must be a regular, safely named file. Each archive level keeps
