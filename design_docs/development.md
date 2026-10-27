@@ -50,6 +50,26 @@ The core test script has a Linux route. AppKit, security-scoped bookmark behavio
 and Foundation's filename detector are macOS-specific, so Linux tests do not
 validate those features.
 
+## Versioning
+
+[current-tree-version.sh](../macOS/Scripts/current-tree-version.sh) follows
+VibeOffice's `vYYYY.MM.DD-abcdef` format, using VibeZip's HEAD commit date in UTC
+and its first six hash characters. The About window and GitHub release tag show
+this full version. Uncommitted changes retain HEAD's version.
+
+The build stamps `Resources/Info.plist` into the app with the numeric date as
+`CFBundleShortVersionString` and the commit's UTC `YYYY.MMDD.HHMM` as
+`CFBundleVersion`, removing leading zeros from each integer. `VibeZipVersion`
+holds the full date-and-hash version. These numeric bundle fields follow
+[Apple's bundle version format](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleversion).
+Commits within the same minute share a build number; a distributed update must
+have a build number later than the previous distributed build.
+
+The corresponding-source archive includes `.vibezip-version` at its root so
+rebuilds without Git preserve the original version. A Git repository enclosing
+an extracted source directory is ignored. App builds require either this
+metadata or the project's own Git checkout; engine-only builds do not.
+
 ## Verification proportional to the change
 
 | Area | Relevant coverage |

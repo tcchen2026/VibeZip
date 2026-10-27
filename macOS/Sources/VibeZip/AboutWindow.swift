@@ -14,7 +14,8 @@ final class AboutWindow: NSWindowController {
         icon.setAccessibilityElement(false)
         let name = NSTextField(labelWithString: "VibeZip")
         name.font = .systemFont(ofSize: 24, weight: .semibold)
-        let versionNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        let versionNumber = (Bundle.main.object(forInfoDictionaryKey: "VibeZipVersion") as? String)
+            ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
         let version = NSTextField(labelWithString: versionNumber.map { L10n.tr("Version \($0)") } ?? "")
         version.font = .systemFont(ofSize: 12); version.textColor = .secondaryLabelColor
         version.isSelectable = true; version.isHidden = versionNumber == nil

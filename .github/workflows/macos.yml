@@ -111,15 +111,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PRERELEASE: ${{ inputs.prerelease }}
         run: |
-          VIBEZIP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' macOS/Resources/Info.plist)
-          VIBEZIP_TAG="v$VIBEZIP_VERSION-$(git rev-parse --short=12 HEAD)"
+          VIBEZIP_VERSION=$(/usr/libexec/PlistBuddy -c 'Print :VibeZipVersion' macOS/dist/VibeZip.app/Contents/Info.plist)
           VIBEZIP_FILES=(macOS/dist/VibeZip-macOS.dmg macOS/dist/VibeZip-macOS.dmg.sha256)
-          if gh release view "$VIBEZIP_TAG" > /dev/null 2>&1; then
-            gh release upload "$VIBEZIP_TAG" "${VIBEZIP_FILES[@]}" --clobber
+          if gh release view "$VIBEZIP_VERSION" > /dev/null 2>&1; then
+            gh release upload "$VIBEZIP_VERSION" "${VIBEZIP_FILES[@]}" --clobber
           else
             VIBEZIP_FLAGS=()
             [ "$PRERELEASE" != true ] || VIBEZIP_FLAGS+=(--prerelease)
-            gh release create "$VIBEZIP_TAG" "${VIBEZIP_FILES[@]}" --target "$GITHUB_SHA" \
+            gh release create "$VIBEZIP_VERSION" "${VIBEZIP_FILES[@]}" --target "$GITHUB_SHA" \
               --title "VibeZip $VIBEZIP_VERSION" --notes-file macOS/RELEASE-NOTES.md "${VIBEZIP_FLAGS[@]}"
           fi
 

@@ -25,6 +25,10 @@ for argument in "$@"; do
     esac
 done
 [ "$(uname -s)" = Darwin ] || { echo 'Use Scripts/test-core.sh for Linux core tests.' >&2; exit 1; }
+if [ "$VIBEZIP_LIBRARY_ONLY" -eq 0 ]; then
+    VIBEZIP_VERSION_METADATA="$(bash "$VIBEZIP_ROOT/Scripts/current-tree-version.sh" --metadata)"
+    read -r VIBEZIP_VERSION VIBEZIP_SHORT_VERSION VIBEZIP_BUILD_VERSION <<< "$VIBEZIP_VERSION_METADATA"
+fi
 if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app/Contents/Developer ]; then
     export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 fi
@@ -69,6 +73,10 @@ else
     cp "${VIBEZIP_LIBRARIES[0]}" "$VIBEZIP_APP/Contents/Frameworks/libVibeZip7z.dylib"
 fi
 cp "$VIBEZIP_ROOT/Resources/Info.plist" "$VIBEZIP_APP/Contents/Info.plist"
+/usr/libexec/PlistBuddy \
+    -c "Set :CFBundleShortVersionString $VIBEZIP_SHORT_VERSION" \
+    -c "Set :CFBundleVersion $VIBEZIP_BUILD_VERSION" \
+    -c "Set :VibeZipVersion $VIBEZIP_VERSION" "$VIBEZIP_APP/Contents/Info.plist"
 cp "$VIBEZIP_ROOT/Resources/PrivacyInfo.xcprivacy" "$VIBEZIP_ROOT/Resources/Privacy.txt" "$VIBEZIP_APP/Contents/Resources/"
 cp "$VIBEZIP_ROOT/README.md" "$VIBEZIP_ROOT/Resources/GitHub.svg" "$VIBEZIP_APP/Contents/Resources/"
 cp -R "$VIBEZIP_BIN/VibeZip_VibeZipCore.bundle" "$VIBEZIP_APP/Contents/Resources/"
@@ -79,11 +87,13 @@ cp "$VIBEZIP_SOURCE/DOC/License.txt" "$VIBEZIP_APP/Contents/Resources/Licenses/7
 cp "$VIBEZIP_SOURCE/DOC/copying.txt" "$VIBEZIP_APP/Contents/Resources/Licenses/LGPL-2.1.txt"
 cp "$VIBEZIP_SOURCE/DOC/unRarLicense.txt" "$VIBEZIP_APP/Contents/Resources/Licenses/"
 cp "$VIBEZIP_ROOT/Scripts/rebuild-engine.sh" "$VIBEZIP_APP/Contents/Resources/Source/"
+printf '%s\n' "$VIBEZIP_VERSION_METADATA" > "$VIBEZIP_STAGING/.vibezip-version"
 COPYFILE_DISABLE=1 tar --exclude='*/.build' --exclude='*/.swiftpm' --exclude='*/dist' \
     --exclude='*/b' --exclude='*/.DS_Store' --exclude='*/._*' --exclude='*/.env*' \
     --exclude='*/.codex' --exclude='*/.agents' --exclude='*/xcuserdata' \
     -czf "$VIBEZIP_APP/Contents/Resources/Source/7zip-source.tar.gz" \
-    -C "$VIBEZIP_SOURCE" Asm C CPP DOC macOS design_docs README.md AGENTS.md .gitignore .gitattributes
+    -C "$VIBEZIP_SOURCE" Asm C CPP DOC macOS design_docs README.md AGENTS.md .gitignore .gitattributes \
+    -C "$VIBEZIP_STAGING" .vibezip-version
 mkdir -p "$VIBEZIP_STAGING/AppIcon.iconset"
 xcrun swift -module-cache-path "$CLANG_MODULE_CACHE_PATH" "$VIBEZIP_ROOT/Scripts/MakeIcon.swift" "$VIBEZIP_STAGING/AppIcon.iconset"
 cp "$VIBEZIP_STAGING/AppIcon.icns" "$VIBEZIP_APP/Contents/Resources/AppIcon.icns"
@@ -106,6 +116,6 @@ if [ "$VIBEZIP_INSTALL" -eq 1 ]; then
     ditto "$VIBEZIP_APP" "$HOME/Applications/VibeZip.app"
     VIBEZIP_APP="$HOME/Applications/VibeZip.app"
 fi
-printf '\nBuilt: %s\n' "$VIBEZIP_APP"
+printf '\nBuilt: %s (%s)\n' "$VIBEZIP_APP" "$VIBEZIP_VERSION"
 printf '%s\n' 'Includes the native 7-Zip library and corresponding source. No 7zz process or Homebrew dependency.'
 if [ "$VIBEZIP_OPEN" -eq 1 ]; then open "$VIBEZIP_APP"; fi

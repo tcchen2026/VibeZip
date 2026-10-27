@@ -52,8 +52,10 @@ It has **only `workflow_dispatch`**. Pushes, pull requests and tags do not build
 On GitHub, select **Actions → macOS DMG → Run workflow**. The workflow uses a
 macOS 26 runner to build both architectures and package the DMG. It does not
 run test suites or UI automation. Every successful run uploads the DMG and checksum as an Actions artifact.
-The optional **Publish release** input creates or updates a release keyed by
-bundle version and commit. It defaults to false; unsigned builds cannot publish.
+The optional **Publish release** input creates or updates a release using the
+built app's `vYYYY.MM.DD-abcdef` version, matching VibeOffice's format with
+VibeZip's own UTC commit date and six-character hash. It defaults to false;
+unsigned builds cannot publish.
 **Pre-release** controls the designation when creating a release.
 
 Create a GitHub environment named `release` and configure these secrets there:

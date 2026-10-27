@@ -21,6 +21,10 @@ Local app bundles use ad-hoc signing and enable App Sandbox with incoming and
 outgoing network access disabled. Store distribution
 requires the publisher's signing and App Store configuration.
 
+Versions follow VibeOffice's `vYYYY.MM.DD-abcdef` format, using this repository's
+UTC commit date and six-character hash. About and release tags show the same
+version. Bundled corresponding source preserves it for rebuilds without Git.
+
 For a local test DMG, run `bash Scripts/package-dmg.sh --unsigned`. This builds
 both architectures and writes `dist/VibeZip-macOS-unsigned.dmg` plus a checksum.
 The GitHub **macOS DMG** workflow runs manually through **Actions → Run workflow**;
