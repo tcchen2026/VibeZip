@@ -1,4 +1,5 @@
 // Zip/Handler.h
+// VibeZip modification (2026-09-23): expose raw legacy ZIP filename bytes.
 
 #ifndef ZIP7_INC_ZIP_HANDLER_H
 #define ZIP7_INC_ZIP_HANDLER_H
@@ -25,14 +26,14 @@ extern const char * const kMethodNames2[kNumMethodNames2];
 
 class CHandler Z7_final:
   public IInArchive,
-  // public IArchiveGetRawProps,
+  public IArchiveGetRawProps,
   public IOutArchive,
   public ISetProperties,
   Z7_PUBLIC_ISetCompressCodecsInfo_IFEC
   public CMyUnknownImp
 {
   Z7_COM_QI_BEGIN2(IInArchive)
-  // Z7_COM_QI_ENTRY(IArchiveGetRawProps)
+  Z7_COM_QI_ENTRY(IArchiveGetRawProps)
   Z7_COM_QI_ENTRY(IOutArchive)
   Z7_COM_QI_ENTRY(ISetProperties)
   Z7_COM_QI_ENTRY_ISetCompressCodecsInfo_IFEC
@@ -40,7 +41,7 @@ class CHandler Z7_final:
   Z7_COM_ADDREF_RELEASE
 
   Z7_IFACE_COM7_IMP(IInArchive)
-  // Z7_IFACE_COM7_IMP(IArchiveGetRawProps)
+  Z7_IFACE_COM7_IMP(IArchiveGetRawProps)
   Z7_IFACE_COM7_IMP(IOutArchive)
   Z7_IFACE_COM7_IMP(ISetProperties)
   DECL_ISetCompressCodecsInfo

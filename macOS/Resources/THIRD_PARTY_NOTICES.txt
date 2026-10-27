@@ -1,0 +1,26 @@
+7-Zip 26.03
+Copyright (C) 1999-2026 Igor Pavlov.
+
+The engine is built from this fork's C, CPP and Asm directories. This fork adds
+raw legacy ZIP filename access through IArchiveGetRawProps in ZipHandler.h and
+ZipHandler.cpp. The macOS bridge uses it for local filename encoding detection.
+
+Most upstream code is LGPL version 2.1 or, at your option, any later version.
+Some components have BSD 2-clause, BSD 3-clause or public-domain terms.
+RAR decompression additionally carries the unRAR restriction: its sources cannot
+be used to re-create the proprietary RAR compression algorithm or to develop a
+RAR (WinRAR) compatible archiver.
+
+See 7-Zip-License.txt, LGPL-2.1.txt, unRarLicense.txt and the upstream per-file
+notices for complete terms. All notices are preserved in the source package.
+
+The macOS additions in this fork are distributed under LGPL-2.1-or-later.
+Original MIT copyright and permission notices remain in VibeZip-MIT.txt.
+The C bridge compiles upstream MyWindows.cpp under its original license.
+
+GitHub mark: Octicons, Copyright (c) 2026 GitHub Inc., MIT license.
+Source: https://github.com/primer/octicons
+See Octicons-MIT.txt.
+
+The app includes corresponding source and the native-library rebuild script in
+Contents/Resources/Source. License texts are in Contents/Resources/Licenses.

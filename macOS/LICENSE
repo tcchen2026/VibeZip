@@ -1,0 +1,18 @@
+VibeZip macOS additions
+Copyright (c) 2026 VibeZip contributors
+
+This software is distributed under the GNU Lesser General Public License as
+published by the Free Software Foundation, either version 2.1 of the License,
+or (at your option) any later version.
+
+This software is distributed without any warranty; without even the implied
+warranty of merchantability or fitness for a particular purpose.
+
+The full license is in ../DOC/copying.txt and is included in application bundles.
+Upstream engine code retains the terms described in ../DOC/License.txt and its
+per-file notices, including the unRAR restriction where applicable.
+
+Portions of the macOS code were previously distributed under the MIT license.
+Their copyright and permission notice is preserved in
+Resources/Licenses/VibeZip-MIT.txt. The GitHub mark's MIT notice is preserved in
+Resources/Licenses/Octicons-MIT.txt.

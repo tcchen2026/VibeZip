@@ -687,6 +687,48 @@ Z7_COM7F_IMF(CHandler::GetProperty(UInt32 index, PROPID propID, PROPVARIANT *val
 
 
 
+// VibeZip modification (2026-09-23): preserve legacy filename bytes for host-side detection.
+// Unicode-marked entries keep the upstream decoder and its extra-field checks.
+Z7_COM7F_IMF(CHandler::GetNumRawProps(UInt32 *numProps))
+{
+  *numProps = 1;
+  return S_OK;
+}
+
+Z7_COM7F_IMF(CHandler::GetRawPropInfo(UInt32 index, BSTR *name, PROPID *propID))
+{
+  *name = NULL;
+  *propID = kpidPath;
+  return index == 0 ? S_OK : E_INVALIDARG;
+}
+
+Z7_COM7F_IMF(CHandler::GetParent(UInt32 index, UInt32 *parent, UInt32 *parentType))
+{
+  *parent = (UInt32)(Int32)-1;
+  *parentType = NParentType::kDir;
+  return index < m_Items.Size() ? S_OK : E_INVALIDARG;
+}
+
+Z7_COM7F_IMF(CHandler::GetRawProp(UInt32 index, PROPID propID, const void **data, UInt32 *dataSize, UInt32 *propType))
+{
+  *data = NULL;
+  *dataSize = 0;
+  *propType = NPropDataType::kNotDefined;
+  if (index >= m_Items.Size())
+    return E_INVALIDARG;
+  const CItemEx &item = m_Items[index];
+  if (propID != kpidPath || item.IsUtf8())
+    return S_OK;
+  const CObjectVector<CExtraSubBlock> &blocks = item.GetMainExtra().SubBlocks;
+  FOR_VECTOR (i, blocks)
+    if (blocks[i].ID == NFileHeader::NExtraID::kIzUnicodeName && blocks[i].CheckIzUnicode(item.Name))
+      return S_OK;
+  *data = item.Name.Ptr();
+  *dataSize = item.Name.Len();
+  *propType = NPropDataType::kRaw;
+  return S_OK;
+}
+
 /*
 Z7_COM7F_IMF(CHandler::GetNumRawProps(UInt32 *numProps)
 {

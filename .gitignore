@@ -1,0 +1,19 @@
+# Generated engine and Swift builds
+**/b/
+**/.build/
+**/.swiftpm/
+macOS/dist/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcresult/
+# Local configuration and system metadata
+.DS_Store
+._*
+.env
+.env.*
+.codex/
+.agents/
+*.log
+*.swp
+*~

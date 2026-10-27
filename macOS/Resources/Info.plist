@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict>
+    <key>CFBundleDevelopmentRegion</key><string>en</string>
+    <key>CFBundleLocalizations</key><array><string>en</string></array>
+    <key>CFBundleExecutable</key><string>VibeZip</string>
+    <key>CFBundleIdentifier</key><string>org.vibezip.swift</string>
+    <key>CFBundleName</key><string>VibeZip</string>
+    <key>CFBundleDisplayName</key><string>VibeZip</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>1.1.0</string>
+    <key>CFBundleVersion</key><string>3</string>
+    <key>CFBundleIconFile</key><string>AppIcon</string>
+    <key>LSMinimumSystemVersion</key><string>13.0</string>
+    <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+    <key>NSHighResolutionCapable</key><true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key><true/>
+    <key>NSPrincipalClass</key><string>NSApplication</string>
+    <key>NSHumanReadableCopyright</key><string>Copyright © 2026 VibeZip contributors.</string>
+    <key>VibeZipRepositoryURL</key><string>https://github.com/tcchen2026/VibeZip</string>
+    <key>CFBundleDocumentTypes</key><array><dict>
+        <key>CFBundleTypeName</key><string>Archive</string>
+        <key>CFBundleTypeRole</key><string>Viewer</string>
+        <key>LSHandlerRank</key><string>Alternate</string>
+        <key>CFBundleTypeExtensions</key><array>
+            <string>7z</string><string>zip</string><string>rar</string><string>tar</string>
+            <string>gz</string><string>bz2</string><string>xz</string><string>tgz</string>
+            <string>tbz2</string><string>txz</string><string>zst</string><string>lzma</string>
+            <string>cab</string><string>wim</string><string>swm</string><string>iso</string>
+            <string>dmg</string><string>xar</string><string>arj</string><string>lzh</string>
+            <string>cpio</string><string>deb</string><string>rpm</string><string>001</string>
+        </array>
+    </dict></array>
+</dict></plist>

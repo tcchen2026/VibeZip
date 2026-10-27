@@ -1,0 +1,474 @@
+#if os(macOS)
+import AppKit
+import VibeZipCore
+
+final class FileTableView: NSTableView {
+    var onFocus: (() -> Void)?
+    var onKey: ((NSEvent) -> Bool)?
+    override func mouseDown(with event: NSEvent) { onFocus?(); super.mouseDown(with: event) }
+    override func rightMouseDown(with event: NSEvent) {
+        onFocus?()
+        let row = self.row(at: convert(event.locationInWindow, from: nil))
+        if row >= 0 && !selectedRowIndexes.contains(row) { selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false) }
+        super.rightMouseDown(with: event)
+    }
+    override func keyDown(with event: NSEvent) {
+        if onKey?(event) == true { return }
+        super.keyDown(with: event)
+    }
+}
+
+final class ArchiveFilePromise: NSObject, NSFilePromiseProviderDelegate {
+    let service: ArchiveService
+    let context: ArchiveContext
+    let entry: BrowserRow
+    let queue: OperationQueue
+    let password: String?
+    var completed: (() -> Void)?
+    init(service: ArchiveService, context: ArchiveContext, entry: BrowserRow, queue: OperationQueue) {
+        self.service = service; self.context = context; self.entry = entry; self.queue = queue; self.password = context.password
+    }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, fileNameForType fileType: String) -> String { entry.name }
+    func operationQueue(for filePromiseProvider: NSFilePromiseProvider) -> OperationQueue { queue }
+    func filePromiseProvider(_ filePromiseProvider: NSFilePromiseProvider, writePromiseTo url: URL,
+                             completionHandler: @escaping (Error?) -> Void) {
+        defer { DispatchQueue.main.async { [self] in completed?() } }
+        do {
+            let scratch = try ScratchDirectory(label: "drag")
+            let token = CancellationToken()
+            try service.extract(context.url, paths: [entry.path], indices: entry.isDirectory ? nil : entry.member?.index.map { [$0] }, to: scratch.url,
+                layout: .relativeTo(ArchivePath.parent(of: entry.path)), password: password, token: token)
+            let source = scratch.url.appendingPathComponent(entry.name)
+            guard !SafeFileSystem.exists(url) else { throw FMError.message("The drop destination already exists: \(url.path)") }
+            var report = TransferReport()
+            try SafeFileSystem.merge(source, into: url, policy: .rename, token: token, report: &report)
+            completionHandler(nil)
+        } catch { completionHandler(error) }
+    }
+}
+
+final class PaneController: NSViewController, NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate, NSMenuItemValidation {
+    weak var owner: MainWindowController?
+    var location: BrowserLocation
+    private(set) var rows: [BrowserRow] = []
+    private var allRows: [BrowserRow] = []
+    private var archiveListing: ArchiveListing?
+    private var history: [BrowserLocation] = []
+    private var historyIndex = -1
+    private var loadingID = UUID()
+    private var promiseDelegates: [ArchiveFilePromise] = []
+    private let emptyState = NSStackView()
+    let table = FileTableView()
+    private let locationBar = LocationBar()
+    var address: NSTextField { locationBar.editor }
+    let search = NSSearchField()
+    let status = OperationStatusView()
+    var canGoBack: Bool { historyIndex > 0 }
+    var canGoForward: Bool { historyIndex + 1 < history.count }
+    var canGoUp: Bool { !location.isEmpty && (location.directory.map { $0.path != "/" } ?? true) }
+    private var query: String { search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
+    var isSearchingArchive: Bool { location.archive != nil && !query.isEmpty }
+
+    init(directory: URL?) {
+        location = directory.map(BrowserLocation.directory) ?? .none
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    override func loadView() {
+        view = NSView()
+        locationBar.canEdit = { [weak self] in self?.owner?.canAcceptCommands == true }
+        locationBar.onSubmit = { [weak self] path in self?.addressEntered(path) }
+        locationBar.onCancel = { [weak self] in
+            guard let self = self else { return }; self.owner?.activate(self)
+        }
+        search.placeholderString = "Search this folder"
+        search.setAccessibilityLabel("Search")
+        search.target = self; search.action = #selector(searchChanged); search.sendsSearchStringImmediately = true
+        search.delegate = self
+        table.headerView = NSTableHeaderView(); table.usesAlternatingRowBackgroundColors = true
+        table.allowsMultipleSelection = true; table.allowsColumnReordering = true; table.allowsColumnResizing = true
+        table.columnAutoresizingStyle = .firstColumnOnlyAutoresizingStyle
+        table.rowHeight = 27; table.intercellSpacing = NSSize(width: 10, height: 3)
+        table.dataSource = self; table.delegate = self; table.target = self; table.doubleAction = #selector(openDoubleClick)
+        let columns: [(String, String, CGFloat)] = [
+            ("name", "Name", 300), ("location", "Location", 240), ("size", "Size", 100), ("packed", "Packed", 100),
+            ("modified", "Modified", 156), ("type", "Type", 100), ("crc", "CRC", 95), ("method", "Method", 135)
+        ]
+        let visibleColumns = Set(UserDefaults.standard.stringArray(forKey: "visibleBrowserColumns") ?? ["name", "size", "packed", "modified"])
+        let columnMenu = NSMenu()
+        for (id, title, width) in columns {
+            let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier(id)); column.title = title
+            column.width = width; column.minWidth = id == "name" ? 140 : 65
+            column.isHidden = id == "location" || (id != "name" && !visibleColumns.contains(id))
+            column.sortDescriptorPrototype = NSSortDescriptor(key: id, ascending: true)
+            table.addTableColumn(column)
+            if id != "location" {
+                let item = NSMenuItem(title: title, action: #selector(toggleColumn), keyEquivalent: "")
+                item.target = self; item.representedObject = id; columnMenu.addItem(item)
+            }
+        }
+        table.headerView?.menu = columnMenu
+        table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
+        table.onFocus = { [weak self] in guard let self = self else { return }; self.owner?.activate(self) }
+        table.onKey = { [weak self] event in self?.handleKey(event) ?? false }
+        table.registerForDraggedTypes([.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+        table.setDraggingSourceOperationMask(.copy, forLocal: false)
+        table.setDraggingSourceOperationMask(.copy, forLocal: true)
+        let scroll = NSScrollView(); scroll.documentView = table
+        scroll.hasVerticalScroller = true; scroll.hasHorizontalScroller = true; scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        let heading = NSTextField(labelWithString: "Choose a folder to get started")
+        heading.font = .systemFont(ofSize: 17, weight: .medium)
+        let explanation = NSTextField(wrappingLabelWithString: "Allow VibeZip to browse a folder and its contents.\nManage saved folder access in Settings.")
+        explanation.alignment = .center; explanation.textColor = .secondaryLabelColor
+        let choose = NSButton(title: "Choose Folder…", target: self, action: #selector(chooseFolder))
+        choose.bezelStyle = .rounded
+        emptyState.orientation = .vertical; emptyState.spacing = 12; emptyState.alignment = .centerX
+        for child in [heading as NSView, explanation, choose] { emptyState.addArrangedSubview(child) }
+        let listContainer = NSView()
+        for child in [scroll as NSView, emptyState] { child.translatesAutoresizingMaskIntoConstraints = false; listContainer.addSubview(child) }
+        NSLayoutConstraint.activate([
+            scroll.leadingAnchor.constraint(equalTo: listContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: listContainer.trailingAnchor),
+            scroll.topAnchor.constraint(equalTo: listContainer.topAnchor), scroll.bottomAnchor.constraint(equalTo: listContainer.bottomAnchor),
+            emptyState.centerXAnchor.constraint(equalTo: listContainer.centerXAnchor), emptyState.centerYAnchor.constraint(equalTo: listContainer.centerYAnchor),
+            emptyState.widthAnchor.constraint(lessThanOrEqualTo: listContainer.widthAnchor, constant: -48)
+        ])
+        let pathContainer = NSView(); let statusContainer = NSView()
+        locationBar.translatesAutoresizingMaskIntoConstraints = false; search.translatesAutoresizingMaskIntoConstraints = false
+        status.translatesAutoresizingMaskIntoConstraints = false
+        pathContainer.addSubview(locationBar); pathContainer.addSubview(search); statusContainer.addSubview(status)
+        let topSeparator = NSBox(); topSeparator.boxType = .separator
+        let bottomSeparator = NSBox(); bottomSeparator.boxType = .separator
+        let stack = NSStackView(views: [pathContainer, topSeparator, listContainer, bottomSeparator, statusContainer]); stack.orientation = .vertical
+        stack.alignment = .leading; stack.spacing = 0; stack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor), stack.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            stack.topAnchor.constraint(equalTo: view.topAnchor), stack.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            pathContainer.heightAnchor.constraint(equalToConstant: 44), pathContainer.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            locationBar.leadingAnchor.constraint(equalTo: pathContainer.leadingAnchor, constant: 12),
+            locationBar.trailingAnchor.constraint(equalTo: search.leadingAnchor, constant: -10),
+            locationBar.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor),
+            locationBar.heightAnchor.constraint(equalToConstant: 26),
+            search.trailingAnchor.constraint(equalTo: pathContainer.trailingAnchor, constant: -12),
+            search.centerYAnchor.constraint(equalTo: pathContainer.centerYAnchor),
+            search.widthAnchor.constraint(equalToConstant: 220),
+            topSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor), bottomSeparator.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            listContainer.widthAnchor.constraint(equalTo: stack.widthAnchor), statusContainer.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            statusContainer.heightAnchor.constraint(equalToConstant: 28),
+            status.leadingAnchor.constraint(equalTo: statusContainer.leadingAnchor, constant: 12),
+            status.trailingAnchor.constraint(equalTo: statusContainer.trailingAnchor, constant: -12),
+            status.centerYAnchor.constraint(equalTo: statusContainer.centerYAnchor),
+            listContainer.heightAnchor.constraint(greaterThanOrEqualToConstant: 180)
+        ])
+    }
+    override func viewDidLoad() { super.viewDidLoad(); navigate(location) }
+
+    var selectedRows: [BrowserRow] { table.selectedRowIndexes.compactMap { rows.indices.contains($0) ? rows[$0] : nil } }
+    var selectedPaths: [String] { selectedRows.map(\.path) }
+    var selectedArchiveIndices: [UInt32]? {
+        guard let archive = location.archive, !selectedRows.isEmpty else { return nil }
+        var result = Set<UInt32>()
+        for row in selectedRows {
+            if row.isDirectory { result.formUnion(archive.listing.selected([row.path]).compactMap(\.index)) }
+            else if let index = row.member?.index { result.insert(index) }
+        }
+        return result.sorted()
+    }
+    var selectedURLs: [URL] { selectedRows.compactMap(\.url) }
+    var suggestedDirectory: URL? {
+        location.directory ?? location.archive?.session.rootURL.deletingLastPathComponent()
+    }
+    @discardableResult func navigate(_ newLocation: BrowserLocation, record: Bool = true) -> Bool {
+        guard owner?.isBusy != true else { return false }
+        if let directory = newLocation.directory, owner?.ensureFolderAccess(directory) != true { return false }
+        status.clearNotice()
+        location = newLocation; search.stringValue = ""
+        archiveListing = nil; allRows = []; rows = []; table.reloadData()
+        if record && !newLocation.isEmpty && (historyIndex < 0 || history[historyIndex].identity != newLocation.identity) {
+            if historyIndex + 1 < history.count { history.removeSubrange((historyIndex + 1)..<history.count) }
+            history.append(newLocation)
+            if history.count > 24 { history.removeFirst() }
+            historyIndex = history.count - 1
+        }
+        refresh(); return true
+    }
+    func refresh() {
+        locationBar.show(path: location.display, components: location.breadcrumbTitles)
+        emptyState.isHidden = !location.isEmpty; table.enclosingScrollView?.isHidden = location.isEmpty
+        search.isEnabled = !location.isEmpty
+        search.placeholderString = location.archive == nil ? "Search this folder" : "Search archive"
+        search.toolTip = location.archive == nil ? "Search names in this folder" : "Search names and paths throughout this archive"
+        owner?.window?.toolbar?.validateVisibleItems()
+        let id = UUID(); loadingID = id; status.summary = "Reading…"
+        if location.isEmpty { status.summary = "Choose a folder to allow access."; owner?.updateTitle(); return }
+        let current = location
+        let listingSnapshot = location.archive?.listing
+        let showHidden = UserDefaults.standard.bool(forKey: "showHidden")
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let result: Result<[BrowserRow], Error>
+            do {
+                switch current {
+                case .none: result = .success([])
+                case .directory(let directory):
+                    let keys: Set<URLResourceKey> = [.isDirectoryKey, .isSymbolicLinkKey, .fileSizeKey, .contentModificationDateKey]
+                    let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: Array(keys),
+                        options: showHidden ? [] : [.skipsHiddenFiles])
+                    let rows = try files.map { try BrowserRow(url: $0, values: $0.resourceValues(forKeys: keys)) }
+                    result = .success(rows)
+                case .archive(_, let prefix):
+                    result = .success((listingSnapshot?.children(of: prefix) ?? []).map(BrowserRow.init(entry:)))
+                }
+            } catch { result = .failure(error) }
+            DispatchQueue.main.async {
+                guard let self = self, self.loadingID == id else { return }
+                switch result {
+                case .success(let rows): self.allRows = rows; self.archiveListing = listingSnapshot; self.applyFilter()
+                case .failure(let error):
+                    self.allRows = []; self.rows = []; self.table.reloadData()
+                    self.owner?.reportError(error)
+                }
+                self.owner?.updateTitle()
+            }
+        }
+    }
+    func discardRevokedLocations() {
+        let access = DirectoryAccessStore.shared
+        func allowed(_ location: BrowserLocation) -> Bool {
+            if let directory = location.directory { return access.allows(directory) }
+            if let archive = location.archive { return access.canReadFile(archive.session.rootURL) }
+            return true
+        }
+        history.removeAll { !allowed($0) }
+        historyIndex = history.lastIndex { $0.identity == location.identity } ?? -1
+        if !allowed(location) { navigate(.none, record: false) }
+        else { refresh() }
+    }
+    @objc private func chooseFolder() { owner?.chooseFolder(nil) }
+    private func applyFilter() {
+        let selection = Set(selectedRows.map(\.identity))
+        let query = self.query
+        if let listing = archiveListing, !query.isEmpty {
+            rows = listing.search(query).map(BrowserRow.init(entry:))
+        } else {
+            rows = allRows.filter { query.isEmpty || $0.name.localizedCaseInsensitiveContains(query) }
+        }
+        table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier("location"))?.isHidden = !isSearchingArchive
+        let descriptor = table.sortDescriptors.first
+        let key = descriptor?.key ?? "name"; let ascending = descriptor?.ascending ?? true
+        rows.sort { first, second in
+            if first.isDirectory != second.isDirectory { return first.isDirectory }
+            var comparison: ComparisonResult
+            switch key {
+            case "size", "packed":
+                let a = (key == "size" ? first.size : first.packedSize) ?? 0
+                let b = (key == "size" ? second.size : second.packedSize) ?? 0
+                comparison = a == b ? .orderedSame : (a < b ? .orderedAscending : .orderedDescending)
+            default:
+                func value(_ row: BrowserRow) -> String {
+                    switch key { case "modified": return row.modified; case "type": return row.type
+                    case "location": return ArchivePath.parent(of: row.path)
+                    case "crc": return row.member?.crc ?? ""; case "method": return row.member?.method ?? ""; default: return row.name }
+                }
+                comparison = value(first).localizedStandardCompare(value(second))
+            }
+            if comparison == .orderedSame { comparison = first.path.localizedStandardCompare(second.path) }
+            if comparison == .orderedSame { comparison = first.identity.compare(second.identity) }
+            return ascending ? comparison == .orderedAscending : comparison == .orderedDescending
+        }
+        table.reloadData()
+        table.selectRowIndexes(IndexSet(rows.indices.filter { selection.contains(rows[$0].identity) }), byExtendingSelection: false)
+        updateStatus()
+    }
+    private func updateStatus() {
+        let selected = selectedRows
+        let total = selected.reduce(UInt64(0)) { sum, row in
+            let (next, overflow) = sum.addingReportingOverflow(row.size ?? 0); return overflow ? UInt64.max : next
+        }
+        let count: String
+        if isSearchingArchive, let archive = location.archive {
+            count = "\(rows.count) \(rows.count == 1 ? "match" : "matches") in \(archive.url.lastPathComponent)"
+        } else { count = query.isEmpty ? "\(rows.count) items" : "\(rows.count) of \(allRows.count) items" }
+        status.summary = count + (location.archive?.canModify == false ? "  ·  Read only" : "") +
+            (selected.isEmpty ? "" : "  ·  Selected \(selected.count) items  ·  \(UIFormat.bytes(total))")
+        owner?.window?.toolbar?.validateVisibleItems()
+    }
+    func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        guard rows.indices.contains(row), let column = tableColumn else { return nil }
+        let item = rows[row]; let id = column.identifier.rawValue
+        if id == "name" {
+            let identifier = NSUserInterfaceItemIdentifier("name-cell")
+            let cell = table.makeView(withIdentifier: identifier, owner: self) as? NSTableCellView ?? makeNameCell(identifier)
+            cell.textField?.stringValue = (item.member?.isEncrypted == true ? "🔒 " : "") + item.name
+            cell.imageView?.image = item.url.map { NSWorkspace.shared.icon(forFile: $0.path) } ??
+                NSImage(systemSymbolName: item.isDirectory ? "folder.fill" : "doc", accessibilityDescription: nil)
+            cell.toolTip = item.path; return cell
+        }
+        let identifier = NSUserInterfaceItemIdentifier("text-" + id)
+        let cell = table.makeView(withIdentifier: identifier, owner: self) as? TableTextCellView ?? TableTextCellView(identifier: identifier)
+        let field = cell.label
+        field.font = (id == "size" || id == "packed") ? .monospacedDigitSystemFont(ofSize: 12, weight: .regular) : .systemFont(ofSize: 12)
+        field.alignment = (id == "size" || id == "packed") ? .right : .left
+        switch id {
+        case "size": field.stringValue = item.isDirectory ? "—" : UIFormat.bytes(item.size)
+        case "packed": field.stringValue = item.isDirectory ? "—" : UIFormat.bytes(item.packedSize)
+        case "modified": field.stringValue = item.modified
+        case "location": field.stringValue = "/" + ArchivePath.parent(of: item.path)
+        case "type": field.stringValue = item.type
+        case "crc": field.stringValue = item.member?.crc ?? ""
+        case "method": field.stringValue = item.member?.method ?? ""
+        default: field.stringValue = ""
+        }
+        field.textColor = .secondaryLabelColor; cell.toolTip = field.stringValue
+        return cell
+    }
+    private func makeNameCell(_ identifier: NSUserInterfaceItemIdentifier) -> NSTableCellView {
+        let cell = NSTableCellView(); cell.identifier = identifier
+        let image = NSImageView(); let text = NSTextField(labelWithString: "")
+        text.usesSingleLineMode = true; text.lineBreakMode = .byTruncatingMiddle; text.font = .systemFont(ofSize: 13)
+        text.setContentHuggingPriority(.required, for: .vertical)
+        text.setContentCompressionResistancePriority(.required, for: .vertical)
+        image.translatesAutoresizingMaskIntoConstraints = false; text.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(image); cell.addSubview(text); cell.imageView = image; cell.textField = text
+        NSLayoutConstraint.activate([
+            image.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 3), image.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            image.widthAnchor.constraint(equalToConstant: 18), image.heightAnchor.constraint(equalToConstant: 18),
+            text.leadingAnchor.constraint(equalTo: image.trailingAnchor, constant: 7), text.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -3),
+            text.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+        ])
+        return cell
+    }
+    func tableViewSelectionDidChange(_ notification: Notification) { updateStatus() }
+    func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) { applyFilter() }
+    @objc func searchChanged() { applyFilter() }
+    func controlTextDidChange(_ obj: Notification) { if obj.object as? NSSearchField === search { applyFilter() } }
+    private func addressEntered(_ path: String) {
+        guard owner?.canAcceptCommands == true else { return }
+        owner?.activate(self)
+        var context = location.archive
+        while let archive = context {
+            let base = archive.session.displayPath
+            if path == base { navigate(.archive(archive, "")); return }
+            if path.hasPrefix(base + " ▸ /") {
+                let prefix = String(path.dropFirst((base + " ▸ /").count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                let folderExists = archive.listing.children(of: ArchivePath.parent(of: prefix)).contains { $0.path == prefix && $0.isDirectory }
+                if prefix.isEmpty || folderExists { navigate(.archive(archive, prefix)) }
+                else { owner?.reportError(FMError.message("The folder does not exist in this archive.")) }
+                return
+            }
+            context = archive.returnLocation?.archive
+        }
+        let expanded = (path as NSString).expandingTildeInPath
+        let url: URL
+        if expanded.hasPrefix("/") { url = URL(fileURLWithPath: expanded) }
+        else if let directory = suggestedDirectory { url = directory.appendingPathComponent(expanded).standardizedFileURL }
+        else { owner?.reportError(FMError.message("Enter an absolute path or choose a folder first.")); return }
+        owner?.openURL(url, in: self)
+    }
+    @objc func goBack() {
+        guard owner?.isBusy != true, historyIndex > 0 else { return }
+        let index = historyIndex - 1
+        if navigate(history[index], record: false) { historyIndex = index; owner?.updateTitle() }
+    }
+    @objc func goForward() {
+        guard owner?.isBusy != true, historyIndex + 1 < history.count else { return }
+        let index = historyIndex + 1
+        if navigate(history[index], record: false) { historyIndex = index; owner?.updateTitle() }
+    }
+    @objc func goUp() {
+        switch location {
+        case .none: break
+        case .directory(let url): navigate(.directory(url.deletingLastPathComponent()))
+        case .archive(let archive, let prefix):
+            if !prefix.isEmpty { navigate(.archive(archive, ArchivePath.parent(of: prefix))) }
+            else { navigate(archive.returnLocation ?? .directory(archive.url.deletingLastPathComponent())) }
+        }
+    }
+    @objc private func openDoubleClick() { owner?.activate(self); owner?.openAsArchive(nil) }
+    private func handleKey(_ event: NSEvent) -> Bool {
+        guard owner?.isBusy != true, !location.isEmpty else { return false }
+        if event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
+            switch event.keyCode {
+            case 36, 76: owner?.openAsArchive(nil)
+            case 49: owner?.previewSelected(nil)
+            case 51: goUp()
+            case 48: return false
+            case 120: owner?.renameSelected(nil)
+            case 99: owner?.previewSelected(nil)
+            case 96: owner?.copyTo(nil)
+            case 97: owner?.moveTo(nil)
+            case 98: owner?.newFolder(nil)
+            case 100, 117: owner?.deleteSelected(nil)
+            default: return false
+            }
+            return true
+        }
+        return false
+    }
+    func selectAllRows() { table.selectAll(nil) }
+    func invertSelection() {
+        let inverse = IndexSet(rows.indices.filter { !table.selectedRowIndexes.contains($0) })
+        table.selectRowIndexes(inverse, byExtendingSelection: false)
+    }
+    func focusAddress() { locationBar.beginEditing() }
+    func focusSearch() { view.window?.makeFirstResponder(search) }
+
+    @objc private func toggleColumn(_ sender: NSMenuItem) {
+        guard let id = sender.representedObject as? String, id != "name",
+              let column = table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(id)) else { return }
+        column.isHidden.toggle()
+        UserDefaults.standard.set(table.tableColumns.filter { !$0.isHidden && $0.identifier.rawValue != "location" }.map { $0.identifier.rawValue },
+                                  forKey: "visibleBrowserColumns")
+    }
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard let id = item.representedObject as? String,
+              let column = table.tableColumn(withIdentifier: NSUserInterfaceItemIdentifier(id)) else { return false }
+        item.state = column.isHidden ? .off : .on
+        return id != "name"
+    }
+
+    func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> NSPasteboardWriting? {
+        guard owner?.isBusy != true, rows.indices.contains(row) else { return nil }
+        let item = rows[row]
+        if let url = item.url { return url as NSURL }
+        guard let owner = owner, let archive = location.archive, owner.obtainPassword(archive) else { return nil }
+        let delegate = ArchiveFilePromise(service: owner.service, context: archive, entry: item, queue: owner.workQueue)
+        promiseDelegates.append(delegate)
+        delegate.completed = { [weak self, weak delegate] in self?.promiseDelegates.removeAll { $0 === delegate } }
+        let provider = NSFilePromiseProvider(fileType: item.isDirectory ? "public.folder" : "public.data", delegate: delegate)
+        return provider
+    }
+    func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int,
+                   proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
+        guard owner?.isBusy != true, !location.isEmpty else { return [] }
+        if let archive = location.archive, !archive.canModify { return [] }
+        let hasURLs = info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
+        if !hasURLs && location.archive != nil { return [] }
+        tableView.setDropRow(-1, dropOperation: .above)
+        return .copy
+    }
+    func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int,
+                   dropOperation: NSTableView.DropOperation) -> Bool {
+        guard let owner = owner else { return false }
+        owner.activate(self)
+        let pasteboard = info.draggingPasteboard
+        if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
+            owner.receiveDropped(urls, in: self); return true
+        }
+        if let directory = location.directory,
+           let promises = pasteboard.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver] {
+            for promise in promises {
+                promise.receivePromisedFiles(atDestination: directory, options: [:], operationQueue: owner.workQueue) { [weak self] _, error in
+                    DispatchQueue.main.async {
+                        if let error = error { self?.owner?.reportError(error) }
+                        self?.refresh()
+                    }
+                }
+            }
+            return true
+        }
+        return false
+    }
+}
+#endif
