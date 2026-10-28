@@ -96,6 +96,25 @@ make them unavailable. Preview text wraps automatically. The preview window is
 read only and has no external-viewer button. Content limits are documented in
 [Sandbox and security](sandbox-and-security.md).
 
+## Drag and drop
+
+Drop files or folders from Finder into an open writable archive to add them to
+the current archive folder. Dropping onto a folder row or icon adds them inside
+that folder, including folders found through archive search. Icons, List and
+Details share the same drop handling, and empty-state text remains a valid drop
+area. Drops copy sources; they do not remove the originals.
+
+New names begin the normal staged, verified archive update without an extra
+Add confirmation. A matching entry or folder asks before proceeding, since a
+folder merge may replace existing contents. Password and containing-folder
+authorization prompts still apply. Read-only archives and busy or modal windows
+do not accept drops. A filesystem destination uses the existing copy operation
+with automatic conflict renaming.
+
+Archive entries can be dragged out as file promises. Incoming file promises are
+accepted into filesystem folders in all three views; adding them directly to
+another archive is not implemented. Finder file URLs can be added to an archive.
+
 ## Search
 
 Search is immediate filtering of the current metadata snapshot:

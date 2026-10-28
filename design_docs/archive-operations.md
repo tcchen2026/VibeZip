@@ -51,6 +51,10 @@ Add, delete, rename and file replacement use one mutation path. An archive can
 be changed only when its handler and every containing archive are writable.
 Multivolume archives, including children inside them, are read only.
 
+Adds can prohibit replacing existing entry paths. The drop flow uses this mode
+when no replacement was confirmed, checking the session's current listing again
+before staging so a refresh cannot silently turn an addition into a replacement.
+
 For an edit to `outer.7z → middle.zip → inner.7z`, the commit sequence is:
 
 ```mermaid

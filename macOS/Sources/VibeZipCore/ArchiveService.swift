@@ -228,12 +228,15 @@ public final class ArchiveService {
     }
 
     public func add(_ sources: [URL], to archive: URL, prefix: String = "", password: String? = nil,
-                    backup: Bool = true, token: CancellationToken = CancellationToken(),
+                    replaceExisting: Bool = true, backup: Bool = true, token: CancellationToken = CancellationToken(),
                     output: @escaping (String) -> Void = { _ in }) throws -> MutationResult {
         lock.lock(); defer { lock.unlock() }
         let session = try open(archive, password: password, token: token)
         let inputs = try sourceItems(sources, prefix: prefix, token: token)
         let paths = Set(inputs.items.compactMap(\.path))
+        if !replaceExisting, session.listing.entries.contains(where: { paths.contains($0.path) }) {
+            throw FMError.message(L10n.tr("The destination name already exists."))
+        }
         var items = retainedItems(session).filter { !paths.contains(session.listing.entries[Int($0.existingIndex)].path) }
         items.append(contentsOf: inputs.items)
         return try mutate(session, items: items, snapshots: inputs.snapshots, backup: backup, token: token, output: output)

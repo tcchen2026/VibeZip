@@ -372,12 +372,18 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 success: { [weak self] _ in self?.refreshFilePanes() })
         }
     }
-    private func addSources(_ urls: [URL], to archive: ArchiveContext, prefix: String) {
-        guard archive.canModify, !urls.isEmpty else { return }
-        guard UIFormat.confirm(L10n.tr("Add to archive"), L10n.tr("\(urls.count) items → \(archive.url.lastPathComponent)/\(prefix)\nExisting entries with the same paths will be updated."), action: L10n.tr("Add")) else { return }
+    private func addSources(_ urls: [URL], to archive: ArchiveContext, prefix: String, confirmAddition: Bool = true) {
+        guard canAcceptCommands, archive.canModify, !urls.isEmpty else { return }
+        // A matching folder can contain replacements, so ask before merging it too.
+        let names = Set(urls.map(\.lastPathComponent))
+        let mayReplace = archive.listing.children(of: prefix).contains { names.contains($0.name) }
+        if confirmAddition || mayReplace {
+            guard UIFormat.confirm(L10n.tr("Add to archive"), L10n.tr("\(urls.count) items → \(archive.url.lastPathComponent)/\(prefix)\nExisting entries with the same paths will be updated."), action: L10n.tr("Add")) else { return }
+        }
         let service = self.service; let backup = keepBackups
         mutateJob(L10n.tr("Update archive"), archive: archive) { token, output in
-            try service.add(urls, to: archive.url, prefix: prefix, password: archive.password, backup: backup, token: token, output: output)
+            try service.add(urls, to: archive.url, prefix: prefix, password: archive.password,
+                replaceExisting: confirmAddition || mayReplace, backup: backup, token: token, output: output)
         }
     }
     private func mutateJob(_ title: String, archive: ArchiveContext,
@@ -555,10 +561,20 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             try FileOperations.copy(urls, to: directory, move: move, policy: policy, token: token, output: output)
         }, success: { [weak self] _ in self?.refreshFilePanes() })
     }
-    func receiveDropped(_ urls: [URL], in pane: PaneController) {
-        guard acceptUserSelectedURLs(urls) else { return }
-        if let archive = pane.location.archive { addSources(urls, to: archive, prefix: pane.location.prefix) }
-        else if let directory = pane.location.directory { transferFiles(urls, to: directory, policy: .rename, move: false) }
+    func receiveDropped(_ urls: [URL], in pane: PaneController, into destination: BrowserLocation) -> Bool {
+        guard canAcceptCommands, !hasActiveOperations, !urls.isEmpty,
+              !destination.isEmpty, destination.archive?.canModify != false else { return false }
+        activate(pane)
+        guard acceptUserSelectedURLs(urls) else { return false }
+        if let archive = destination.archive {
+            addSources(urls, to: archive, prefix: destination.prefix, confirmAddition: false)
+            return true
+        }
+        if let directory = destination.directory, ensureFolderAccess(directory) {
+            transferFiles(urls, to: directory, policy: .rename, move: false)
+            return true
+        }
+        return false
     }
     private func materializeSelection(_ pane: PaneController, completion: @escaping ([URL]) -> Void) {
         let rows = pane.selectedRows

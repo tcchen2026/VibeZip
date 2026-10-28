@@ -18,6 +18,32 @@ final class FileTableView: NSTableView {
     }
 }
 
+/// Handles drops over the empty-state overlay and unused space around the file views.
+final class FileDropView: NSView {
+    var validateDrop: ((NSDraggingInfo) -> NSDragOperation)?
+    var acceptDrop: ((NSDraggingInfo) -> Bool)?
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        draggingUpdated(sender)
+    }
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        let operation = validateDrop?(sender) ?? []
+        wantsLayer = true
+        layer?.borderColor = NSColor.controlAccentColor.cgColor
+        layer?.borderWidth = operation.isEmpty ? 0 : 2
+        return operation
+    }
+    override func draggingExited(_ sender: NSDraggingInfo?) { layer?.borderWidth = 0 }
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        !(validateDrop?(sender) ?? []).isEmpty
+    }
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        layer?.borderWidth = 0
+        return acceptDrop?(sender) ?? false
+    }
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) { layer?.borderWidth = 0 }
+}
+
 final class ArchiveFilePromise: NSObject, NSFilePromiseProviderDelegate {
     let service: ArchiveService
     let context: ArchiveContext
@@ -83,6 +109,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
     private var query: String { search.stringValue.trimmingCharacters(in: .whitespacesAndNewlines) }
     var isSearchingArchive: Bool { location.archive != nil && !query.isEmpty }
+    private let dropTypes: [NSPasteboard.PasteboardType] = [.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) }
 
     init(directory: URL?) {
         location = directory.map(BrowserLocation.directory) ?? .none
@@ -133,7 +160,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         table.sortDescriptors = [NSSortDescriptor(key: "name", ascending: true)]
         table.onFocus = { [weak self] in guard let self = self else { return }; self.owner?.activate(self) }
         table.onKey = { [weak self] event in self?.handleKey(event) ?? false }
-        table.registerForDraggedTypes([.fileURL] + NSFilePromiseReceiver.readableDraggedTypes.map { NSPasteboard.PasteboardType($0) })
+        table.registerForDraggedTypes(dropTypes)
         table.setDraggingSourceOperationMask(.copy, forLocal: false)
         table.setDraggingSourceOperationMask(.copy, forLocal: true)
         let scroll = NSScrollView(); scroll.documentView = table
@@ -148,7 +175,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         collection.onFocus = { [weak self] in guard let self = self else { return }; self.owner?.activate(self) }
         collection.onKey = { [weak self] event in self?.handleKey(event) ?? false }
         collection.onOpen = { [weak self] in self?.owner?.openAsArchive(nil) }
-        collection.registerForDraggedTypes([.fileURL])
+        collection.registerForDraggedTypes(dropTypes)
         collection.setDraggingSourceOperationMask(.copy, forLocal: false)
         collection.setDraggingSourceOperationMask(.copy, forLocal: true)
         gridScroll.documentView = collection; gridScroll.hasVerticalScroller = true; gridScroll.autohidesScrollers = true
@@ -159,7 +186,16 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         chooseButton.target = self; chooseButton.action = #selector(chooseFolder); chooseButton.bezelStyle = .rounded
         emptyState.orientation = .vertical; emptyState.spacing = 12; emptyState.alignment = .centerX
         for child in [emptyIcon as NSView, emptyHeading, emptyExplanation, chooseButton] { emptyState.addArrangedSubview(child) }
-        let listContainer = NSView()
+        let listContainer = FileDropView()
+        listContainer.registerForDraggedTypes(dropTypes)
+        listContainer.validateDrop = { [weak self] info in
+            guard let self = self else { return [] }
+            return self.validateDrop(info, into: self.location)
+        }
+        listContainer.acceptDrop = { [weak self] info in
+            guard let self = self else { return false }
+            return self.acceptDrop(info, into: self.location)
+        }
         for child in [scroll as NSView, gridScroll, emptyState] { child.translatesAutoresizingMaskIntoConstraints = false; listContainer.addSubview(child) }
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: listContainer.leadingAnchor), scroll.trailingAnchor.constraint(equalTo: listContainer.trailingAnchor),
@@ -455,13 +491,19 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
     func collectionView(_ collectionView: NSCollectionView, validateDrop draggingInfo: NSDraggingInfo,
                         proposedIndexPath: AutoreleasingUnsafeMutablePointer<NSIndexPath>, dropOperation: UnsafeMutablePointer<NSCollectionView.DropOperation>) -> NSDragOperation {
-        guard owner?.canAcceptCommands == true, !location.isEmpty, location.archive?.canModify != false,
-              draggingInfo.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) else { return [] }
-        return .copy
+        let indexPath = proposedIndexPath.pointee as IndexPath
+        let row = dropOperation.pointee == .on ? indexPath.item : -1
+        let destination = dropLocation(forRow: row)
+        let operation = validateDrop(draggingInfo, into: destination)
+        if destination.identity == location.identity {
+            dropOperation.pointee = .before
+            proposedIndexPath.pointee = IndexPath(item: rows.count, section: 0) as NSIndexPath
+        }
+        return operation
     }
     func collectionView(_ collectionView: NSCollectionView, acceptDrop draggingInfo: NSDraggingInfo, indexPath: IndexPath,
                         dropOperation: NSCollectionView.DropOperation) -> Bool {
-        tableView(table, acceptDrop: draggingInfo, row: -1, dropOperation: .above)
+        acceptDrop(draggingInfo, into: dropLocation(forRow: dropOperation == .on ? indexPath.item : -1))
     }
     func tableView(_ tableView: NSTableView, sortDescriptorsDidChange oldDescriptors: [NSSortDescriptor]) { applyFilter() }
     @objc func searchChanged() { applyFilter() }
@@ -568,23 +610,42 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
     func tableView(_ tableView: NSTableView, validateDrop info: NSDraggingInfo, proposedRow row: Int,
                    proposedDropOperation dropOperation: NSTableView.DropOperation) -> NSDragOperation {
-        guard owner?.isBusy != true, !location.isEmpty else { return [] }
-        if let archive = location.archive, !archive.canModify { return [] }
-        let hasURLs = info.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-        if !hasURLs && location.archive != nil { return [] }
-        tableView.setDropRow(-1, dropOperation: .above)
-        return .copy
+        let destination = dropLocation(forRow: dropOperation == .on ? row : -1)
+        let operation = validateDrop(info, into: destination)
+        if destination.identity == location.identity { tableView.setDropRow(-1, dropOperation: .above) }
+        return operation
     }
     func tableView(_ tableView: NSTableView, acceptDrop info: NSDraggingInfo, row: Int,
                    dropOperation: NSTableView.DropOperation) -> Bool {
-        guard let owner = owner else { return false }
+        acceptDrop(info, into: dropLocation(forRow: dropOperation == .on ? row : -1))
+    }
+
+    private func dropLocation(forRow row: Int) -> BrowserLocation {
+        guard rows.indices.contains(row), rows[row].isDirectory, !rows[row].isLink else { return location }
+        if let archive = location.archive { return .archive(archive, rows[row].path) }
+        if let url = rows[row].url { return .directory(url) }
+        return location
+    }
+
+    private func validateDrop(_ info: NSDraggingInfo, into destination: BrowserLocation) -> NSDragOperation {
+        guard let owner = owner, owner.canAcceptCommands, !owner.hasActiveOperations,
+              !destination.isEmpty, destination.archive?.canModify != false else { return [] }
+        let pasteboard = info.draggingPasteboard
+        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) { return .copy }
+        if destination.directory != nil, pasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) { return .copy }
+        return []
+    }
+
+    private func acceptDrop(_ info: NSDraggingInfo, into destination: BrowserLocation) -> Bool {
+        guard let owner = owner, !validateDrop(info, into: destination).isEmpty else { return false }
         owner.activate(self)
         let pasteboard = info.draggingPasteboard
         if let urls = pasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL], !urls.isEmpty {
-            owner.receiveDropped(urls, in: self); return true
+            return owner.receiveDropped(urls, in: self, into: destination)
         }
-        if let directory = location.directory,
-           let promises = pasteboard.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver] {
+        if let directory = destination.directory,
+           let promises = pasteboard.readObjects(forClasses: [NSFilePromiseReceiver.self], options: nil) as? [NSFilePromiseReceiver],
+           !promises.isEmpty, owner.ensureFolderAccess(directory) {
             for promise in promises {
                 promise.receivePromisedFiles(atDestination: directory, options: [:], operationQueue: owner.workQueue) { [weak self] _, error in
                     DispatchQueue.main.async {

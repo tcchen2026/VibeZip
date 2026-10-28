@@ -64,6 +64,11 @@ through their parents; multivolume archives are read only. Preview is local and
 supports text, hex, images and PDF. Long operations report progress and can be
 cancelled. Archive tests display their result in a dialog.
 
+Drag files or folders from Finder into an open ZIP or another writable archive
+to add them. Drop onto a folder to add them inside it, or onto empty space to use
+the current folder. This works in Icons, List and Details. New names are added
+directly; matching names or folders ask before updating existing contents.
+
 ZIP names with valid Unicode metadata retain it. Other names are checked for
 UTF-8 and automatically detected legacy code pages, including GBK, Big5 and
 Shift-JIS, with CP437 as the fallback. Detection is heuristic when a ZIP lacks
