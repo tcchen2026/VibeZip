@@ -32,6 +32,15 @@ it never runs on push. Like VibeOffice, it publishes a signed, notarized DMG whe
 release credentials are configured, or keeps an unsigned app ZIP artifact otherwise.
 See [DMG distribution](../design_docs/distribution.md) for secrets and release options.
 
+For the Mac App Store, `bash Scripts/package-mas.sh` produces a signed universal
+`dist/VibeZip-MAS.pkg` using store distribution certificates, a matching profile
+and an explicit store build number. The separate **macOS App Store** Actions
+workflow saves this package as an artifact. `--unsigned` creates an inspection
+package that cannot be uploaded. Packaging does not submit the app, and
+Transporter.app is optional for upload. See
+[Mac App Store packaging](../design_docs/app-store.md) for setup and remaining
+release verification.
+
 ## Use
 
 Choose a folder on first launch. Saved security-scoped bookmarks allow the app to

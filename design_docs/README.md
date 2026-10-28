@@ -19,6 +19,7 @@ target, not a statement that the current build has been submitted or approved.
 | [ZIP filenames](zip-filenames.md) | Legacy filename decoding or the ZIP handler extension |
 | [Development and release](development.md) | Builds, focused verification, source packaging or release preparation |
 | [DMG distribution](distribution.md) | Manual GitHub Actions builds, signing secrets, notarization and sandbox verification |
+| [Mac App Store packaging](app-store.md) | Store certificates, provisioning, signed PKG artifacts and upload preparation |
 | [Design integration](design-integration.md) | Complete imported reference and the shipping UI's integration status |
 
 The project purpose, design principles and source map are summarized in

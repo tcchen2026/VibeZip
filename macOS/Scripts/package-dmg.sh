@@ -29,7 +29,8 @@ VIBEZIP_APP="$VIBEZIP_ROOT/dist/VibeZip.app"
 # A release must contain both architectures even when reusing a build.
 if [ "$VIBEZIP_UNSIGNED" -eq 0 ]; then
     for VIBEZIP_BINARY in "$VIBEZIP_APP/Contents/MacOS/VibeZip" "$VIBEZIP_APP/Contents/Frameworks/libVibeZip7z.dylib"; do
-        xcrun lipo -verify_arch arm64 x86_64 "$VIBEZIP_BINARY"
+        xcrun lipo "$VIBEZIP_BINARY" -verify_arch arm64
+        xcrun lipo "$VIBEZIP_BINARY" -verify_arch x86_64
     done
 fi
 mkdir -p "$VIBEZIP_ROOT/.build" "$VIBEZIP_ROOT/dist"

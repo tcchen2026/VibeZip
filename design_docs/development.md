@@ -23,6 +23,8 @@ open dist/VibeZip.app
 | `bash build.sh --library-only` | Build just the native engine |
 | `bash Scripts/package-dmg.sh --unsigned` | Build and package a universal local DMG |
 | `bash Scripts/package-dmg.sh` | Build, sign and notarize a universal release DMG using configured credentials |
+| `bash Scripts/package-mas.sh --unsigned` | Build a universal package for local structure checks |
+| `bash Scripts/package-mas.sh` | Build and sign a Mac App Store package using configured store credentials |
 | `bash Scripts/test-core.sh` | Build the engine and run core/native tests |
 | `bash Scripts/test-core.sh --filter ZIPFilenameEncodingTests` | Run a focused test suite |
 
@@ -64,6 +66,9 @@ holds the full date-and-hash version. These numeric bundle fields follow
 [Apple's bundle version format](https://developer.apple.com/documentation/bundleresources/information-property-list/cfbundleversion).
 Commits within the same minute share a build number; a distributed update must
 have a build number later than the previous distributed build.
+Store packaging keeps the date-based marketing/About versions and uses a
+separate, explicitly increasing `VIBEZIP_MAS_BUILD_NUMBER` in its staged app.
+See [Mac App Store packaging](app-store.md) for local and Actions numbering.
 
 The corresponding-source archive includes `.vibezip-version` at its root so
 rebuilds without Git preserve the original version. A Git repository enclosing
@@ -121,8 +126,12 @@ documentation surface.
 
 Direct DMG distribution is implemented by `Scripts/package-dmg.sh`; publishing
 requires the configured Developer ID and notarization credentials. The regular
-app build remains ad-hoc signed. Mac App Store provisioning, store metadata and
-submission are separate future work; the DMG workflow does not upload to the store.
+app build remains ad-hoc signed. `Scripts/package-mas.sh` and the separate manual
+**macOS App Store** workflow prepare signed store packages with a matching
+provisioning profile. See [Mac App Store packaging](app-store.md). Real store
+signing and upload acceptance still need verification with publisher credentials;
+store metadata and submission remain release work. Neither workflow uploads to
+App Store Connect.
 
 Before a release, validate the exact distributed build's folder authorization,
 restore and revoke flows, access to multivolume siblings, destination writes and

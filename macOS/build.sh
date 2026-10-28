@@ -77,6 +77,21 @@ cp "$VIBEZIP_ROOT/Resources/Info.plist" "$VIBEZIP_APP/Contents/Info.plist"
     -c "Set :CFBundleShortVersionString $VIBEZIP_SHORT_VERSION" \
     -c "Set :CFBundleVersion $VIBEZIP_BUILD_VERSION" \
     -c "Set :VibeZipVersion $VIBEZIP_VERSION" "$VIBEZIP_APP/Contents/Info.plist"
+# Record the tools that actually built the app, including for App Store uploads.
+VIBEZIP_SDK_VERSION="$(xcrun --sdk macosx --show-sdk-version)"
+VIBEZIP_SDK_BUILD="$(xcrun --sdk macosx --show-sdk-build-version)"
+VIBEZIP_XCODE_INFO="$(xcodebuild -version)"
+VIBEZIP_XCODE_BUILD="$(printf '%s\n' "$VIBEZIP_XCODE_INFO" | awk '/^Build version / { print $3 }')"
+VIBEZIP_XCODE_NUMBER="$(printf '%s\n' "$VIBEZIP_XCODE_INFO" | awk '/^Xcode / { split($2, v, "."); printf "%02d%d%d", v[1], v[2], v[3] }')"
+/usr/libexec/PlistBuddy \
+    -c "Add :DTPlatformName string macosx" \
+    -c "Add :DTPlatformVersion string $VIBEZIP_SDK_VERSION" \
+    -c "Add :DTPlatformBuild string $VIBEZIP_SDK_BUILD" \
+    -c "Add :DTSDKName string macosx$VIBEZIP_SDK_VERSION" \
+    -c "Add :DTSDKBuild string $VIBEZIP_SDK_BUILD" \
+    -c "Add :DTXcode string $VIBEZIP_XCODE_NUMBER" \
+    -c "Add :DTXcodeBuild string $VIBEZIP_XCODE_BUILD" \
+    -c "Add :BuildMachineOSBuild string $(sw_vers -buildVersion)" "$VIBEZIP_APP/Contents/Info.plist"
 cp "$VIBEZIP_ROOT/Resources/PrivacyInfo.xcprivacy" "$VIBEZIP_ROOT/Resources/Privacy.txt" "$VIBEZIP_APP/Contents/Resources/"
 cp "$VIBEZIP_ROOT/README.md" "$VIBEZIP_ROOT/Resources/GitHub.svg" "$VIBEZIP_APP/Contents/Resources/"
 cp -R "$VIBEZIP_BIN/VibeZip_VibeZipCore.bundle" "$VIBEZIP_APP/Contents/Resources/"
@@ -91,6 +106,8 @@ printf '%s\n' "$VIBEZIP_VERSION_METADATA" > "$VIBEZIP_STAGING/.vibezip-version"
 COPYFILE_DISABLE=1 tar --exclude='*/.build' --exclude='*/.swiftpm' --exclude='*/dist' \
     --exclude='*/b' --exclude='*/.DS_Store' --exclude='*/._*' --exclude='*/.env*' \
     --exclude='*/.codex' --exclude='*/.agents' --exclude='*/xcuserdata' \
+    --exclude='*.p12' --exclude='*.pfx' --exclude='*.p8' --exclude='*.pem' \
+    --exclude='*.provisionprofile' --exclude='*.mobileprovision' --exclude='*.keychain*' \
     -czf "$VIBEZIP_APP/Contents/Resources/Source/7zip-source.tar.gz" \
     -C "$VIBEZIP_SOURCE" Asm C CPP DOC macOS design_docs README.md AGENTS.md .gitignore .gitattributes \
     -C "$VIBEZIP_STAGING" .vibezip-version

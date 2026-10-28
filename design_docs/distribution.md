@@ -84,7 +84,8 @@ in an `always()` cleanup step. No App Store upload is included in this workflow.
 Secret names match VibeOffice, but the `release` environment and its secrets must
 be configured for the VibeZip repository as well (or supplied through organization
 secrets accessible to it). App Store package signing and upload remain separate
-release work; this workflow only handles direct distribution.
+from this workflow; [Mac App Store packaging](app-store.md) describes the separate
+PKG script and workflow. This workflow only handles direct distribution.
 
 The repository remote for this project is `git@github.com:tcchen2026/VibeZip.git`.
 The previous fork remote remains `upstream`. Committing locally neither pushes

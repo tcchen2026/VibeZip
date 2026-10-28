@@ -1,0 +1,139 @@
+name: macOS App Store
+
+# Packaging only. Uploading to App Store Connect is a separate release action.
+on:
+  workflow_dispatch:
+    inputs:
+      unsigned:
+        description: Create an unsigned package for local inspection only
+        type: boolean
+        default: false
+      build_number:
+        description: Store build number (blank uses workflow run number and attempt)
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: macos-mas-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  package:
+    runs-on: macos-26
+    timeout-minutes: 90
+    environment: release
+    env:
+      VIBEZIP_UNSIGNED: ${{ inputs.unsigned }}
+      VIBEZIP_MAS_BUILD_NUMBER: ${{ inputs.build_number || format('{0}.{1}', github.run_number, github.run_attempt) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        id: tools
+        run: |
+          export DEVELOPER_DIR="$(xcode-select -p)"
+          printf 'DEVELOPER_DIR=%s\n' "$DEVELOPER_DIR" >> "$GITHUB_ENV"
+          VIBEZIP_XCODE_VERSION=$(xcodebuild -version | awk '/^Xcode / { print $2 }')
+          VIBEZIP_SDK_VERSION=$(xcrun --sdk macosx --show-sdk-version)
+          [ "${VIBEZIP_XCODE_VERSION%%.*}" -ge 26 ] || { echo '::error::VibeZip requires Xcode 26 or later.'; exit 1; }
+          [ "${VIBEZIP_SDK_VERSION%%.*}" -ge 26 ] || { echo '::error::VibeZip requires the macOS 26 SDK or later.'; exit 1; }
+          xcodebuild -version
+          xcrun swift --version
+          printf 'xcode=%s\n' "$(xcodebuild -version | awk '/^Build version / { print $3 }')" >> "$GITHUB_OUTPUT"
+
+      - name: Check store configuration
+        if: env.VIBEZIP_UNSIGNED != 'true'
+        env:
+          MAS_APP_P12: ${{ secrets.MACOS_MAS_APP_P12 }}
+          MAS_INSTALLER_P12: ${{ secrets.MACOS_MAS_INSTALLER_P12 }}
+          MAS_PROFILE: ${{ secrets.MACOS_MAS_PROFILE }}
+        run: |
+          : "${MAS_APP_P12:?Missing MACOS_MAS_APP_P12}"
+          : "${MAS_INSTALLER_P12:?Missing MACOS_MAS_INSTALLER_P12}"
+          : "${MAS_PROFILE:?Missing MACOS_MAS_PROFILE}"
+
+      - name: Cache build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            CPP/7zip/Bundles/Format7zF/b
+            macOS/.build/native
+            macOS/.build/swift-sandbox
+            macOS/.build/swiftpm-cache
+            macOS/.build/clang-module-cache
+            macOS/.build/swift-module-cache
+          key: vibezip-macos-${{ runner.arch }}-${{ steps.tools.outputs.xcode }}-${{ github.sha }}
+          restore-keys: |
+            vibezip-macos-${{ runner.arch }}-${{ steps.tools.outputs.xcode }}-
+
+      - name: Import store signing material
+        if: env.VIBEZIP_UNSIGNED != 'true'
+        env:
+          MAS_APP_P12: ${{ secrets.MACOS_MAS_APP_P12 }}
+          MAS_APP_PASSWORD: ${{ secrets.MACOS_MAS_APP_PASSWORD }}
+          MAS_INSTALLER_P12: ${{ secrets.MACOS_MAS_INSTALLER_P12 }}
+          MAS_INSTALLER_PASSWORD: ${{ secrets.MACOS_MAS_INSTALLER_PASSWORD }}
+          MAS_PROFILE: ${{ secrets.MACOS_MAS_PROFILE }}
+        run: |
+          umask 077
+          VIBEZIP_KEYCHAIN="$RUNNER_TEMP/vibezip-mas.keychain-db"
+          VIBEZIP_KEYCHAIN_PASSWORD=$(openssl rand -hex 24)
+          echo "::add-mask::$VIBEZIP_KEYCHAIN_PASSWORD"
+          security create-keychain -p "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$VIBEZIP_KEYCHAIN"
+          security unlock-keychain -p "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN"
+          printf '%s' "$MAS_APP_P12" | base64 --decode > "$RUNNER_TEMP/vibezip-mas-app.p12"
+          printf '%s' "$MAS_INSTALLER_P12" | base64 --decode > "$RUNNER_TEMP/vibezip-mas-installer.p12"
+          security import "$RUNNER_TEMP/vibezip-mas-app.p12" -k "$VIBEZIP_KEYCHAIN" -P "$MAS_APP_PASSWORD" -T /usr/bin/codesign
+          security import "$RUNNER_TEMP/vibezip-mas-installer.p12" -k "$VIBEZIP_KEYCHAIN" -P "$MAS_INSTALLER_PASSWORD" -T /usr/bin/productbuild -T /usr/bin/productsign
+          rm -f "$RUNNER_TEMP/vibezip-mas-app.p12" "$RUNNER_TEMP/vibezip-mas-installer.p12"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$VIBEZIP_KEYCHAIN_PASSWORD" "$VIBEZIP_KEYCHAIN" > /dev/null
+          VIBEZIP_KEYCHAINS=("$VIBEZIP_KEYCHAIN")
+          while IFS= read -r VIBEZIP_EXISTING_KEYCHAIN; do
+            if [ -n "$VIBEZIP_EXISTING_KEYCHAIN" ] && [ "$VIBEZIP_EXISTING_KEYCHAIN" != "$VIBEZIP_KEYCHAIN" ]; then
+              VIBEZIP_KEYCHAINS+=("$VIBEZIP_EXISTING_KEYCHAIN")
+            fi
+          done < <(security list-keychains -d user | sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
+          security list-keychains -d user -s "${VIBEZIP_KEYCHAINS[@]}"
+          printf '%s' "$MAS_PROFILE" | base64 --decode > "$RUNNER_TEMP/vibezip-mas.provisionprofile"
+          printf 'VIBEZIP_MAS_KEYCHAIN=%s\n' "$VIBEZIP_KEYCHAIN" >> "$GITHUB_ENV"
+          printf 'VIBEZIP_MAS_PROFILE=%s\n' "$RUNNER_TEMP/vibezip-mas.provisionprofile" >> "$GITHUB_ENV"
+
+      - name: Build and package universal app
+        run: |
+          VIBEZIP_PACKAGE_ARGS=()
+          if [ "$VIBEZIP_UNSIGNED" = true ]; then VIBEZIP_PACKAGE_ARGS+=(--unsigned); fi
+          bash macOS/Scripts/package-mas.sh "${VIBEZIP_PACKAGE_ARGS[@]}"
+
+      - name: Keep signed store package
+        if: env.VIBEZIP_UNSIGNED != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibeZip-MAS
+          path: |
+            macOS/dist/VibeZip-MAS.pkg
+            macOS/dist/VibeZip-MAS.pkg.sha256
+          if-no-files-found: error
+
+      - name: Keep unsigned inspection package
+        if: env.VIBEZIP_UNSIGNED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibeZip-MAS-unsigned
+          path: |
+            macOS/dist/VibeZip-MAS-unsigned.pkg
+            macOS/dist/VibeZip-MAS-unsigned.pkg.sha256
+          if-no-files-found: error
+
+      - name: Remove store signing material
+        if: always() && env.VIBEZIP_UNSIGNED != 'true'
+        run: |
+          security delete-keychain "$RUNNER_TEMP/vibezip-mas.keychain-db" || true
+          rm -f "$RUNNER_TEMP/vibezip-mas-app.p12" "$RUNNER_TEMP/vibezip-mas-installer.p12" "$RUNNER_TEMP/vibezip-mas.provisionprofile"
