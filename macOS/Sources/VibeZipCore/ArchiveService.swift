@@ -228,7 +228,7 @@ public final class ArchiveService {
     }
 
     public func add(_ sources: [URL], to archive: URL, prefix: String = "", password: String? = nil,
-                    replaceExisting: Bool = true, backup: Bool = true, token: CancellationToken = CancellationToken(),
+                    replaceExisting: Bool = true, backup: Bool = false, token: CancellationToken = CancellationToken(),
                     output: @escaping (String) -> Void = { _ in }) throws -> MutationResult {
         lock.lock(); defer { lock.unlock() }
         let session = try open(archive, password: password, token: token)
@@ -242,7 +242,7 @@ public final class ArchiveService {
         return try mutate(session, items: items, snapshots: inputs.snapshots, backup: backup, token: token, output: output)
     }
 
-    public func delete(_ paths: [String], from archive: URL, password: String? = nil, backup: Bool = true,
+    public func delete(_ paths: [String], from archive: URL, password: String? = nil, backup: Bool = false,
                        token: CancellationToken = CancellationToken(), output: @escaping (String) -> Void = { _ in }) throws -> MutationResult {
         lock.lock(); defer { lock.unlock() }
         guard !paths.isEmpty else { throw FMError.message(L10n.tr("No entries selected.")) }
@@ -253,7 +253,7 @@ public final class ArchiveService {
             backup: backup, token: token, output: output)
     }
 
-    public func rename(_ path: String, to newPath: String, in archive: URL, password: String? = nil, backup: Bool = true,
+    public func rename(_ path: String, to newPath: String, in archive: URL, password: String? = nil, backup: Bool = false,
                        token: CancellationToken = CancellationToken(), output: @escaping (String) -> Void = { _ in }) throws -> MutationResult {
         lock.lock(); defer { lock.unlock() }
         _ = try ArchivePath.validate(path); _ = try ArchivePath.validate(newPath)
@@ -270,7 +270,7 @@ public final class ArchiveService {
     }
 
     public func updateFile(_ source: URL, path: String, in archive: URL, password: String? = nil,
-                           expectedFingerprint: FileFingerprint? = nil, backup: Bool = true,
+                           expectedFingerprint: FileFingerprint? = nil, backup: Bool = false,
                            token: CancellationToken = CancellationToken(), output: @escaping (String) -> Void = { _ in }) throws -> MutationResult {
         lock.lock(); defer { lock.unlock() }; _ = try ArchivePath.validate(path)
         let session = try open(archive, password: password, token: token)

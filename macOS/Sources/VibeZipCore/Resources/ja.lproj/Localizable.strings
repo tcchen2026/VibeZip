@@ -207,6 +207,7 @@
 "Item" = "項目";
 "Items" = "項目";
 "Keep a backup before updating an archive" = "アーカイブの更新前にバックアップを保存";
+"Each edit keeps a full backup beside the archive until you delete it." = "編集のたびにアーカイブ全体のバックアップが同じ場所に保存され、手動で削除するまで残ります。";
 "Last operation log" = "前回の操作ログ";
 "Licensed under LGPL 2.1 or later" = "LGPL 2.1 以降のライセンスで提供";
 "Link" = "リンク";

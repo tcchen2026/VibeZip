@@ -92,6 +92,9 @@ grant folder access. Files opened from Finder use the existing user-selected-fil
 ## Persistence and cleanup
 
 Preferences, authorization history and window state stay in local preferences.
+Retained archive backups are off by default. Enabling them in Settings keeps a
+full copy beside the outermost archive after each edit; they are not temporary
+files. Staging and verification remain enabled regardless of this preference.
 Passwords live in session memory and can be cleared through the Tools menu or
 by quitting; they are not written to command arguments, preferences or logs.
 This is not a guarantee of cryptographic zeroization of all process memory.

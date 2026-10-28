@@ -87,6 +87,11 @@ directory. Cleanup removes unused copies while preserving files held by open
 archives and running operations. Archive backups and staging beside user files
 are outside this cleanup.
 
+Archive edits use temporary staging and verification, with retained backups off
+by default. To keep a recovery copy after each edit, enable **Keep a backup before
+updating an archive** in Settings → General. Each copy stays beside the outermost
+archive as `<archive>.backup-<UUID>` until you remove it.
+
 **Set VibeZip as Default** in Settings → General starts with `.zip/.7z/.rar`
 selected; clicking the button applies all three. Individual formats remain in the
 combo box. macOS may request confirmation for each type, and declining stops the

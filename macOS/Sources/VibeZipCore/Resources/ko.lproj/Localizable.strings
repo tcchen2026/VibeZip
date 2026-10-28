@@ -207,6 +207,7 @@
 "Item" = "항목";
 "Items" = "항목";
 "Keep a backup before updating an archive" = "압축 파일 업데이트 전에 백업 보관";
+"Each edit keeps a full backup beside the archive until you delete it." = "편집할 때마다 압축 파일과 같은 폴더에 전체 백업이 생성되며, 직접 삭제할 때까지 보관됩니다.";
 "Last operation log" = "최근 작업 로그";
 "Licensed under LGPL 2.1 or later" = "LGPL 2.1 이상 라이선스로 제공";
 "Link" = "링크";

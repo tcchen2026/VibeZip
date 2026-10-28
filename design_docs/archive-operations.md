@@ -73,7 +73,19 @@ same-filesystem `rename` to replace it atomically. The original stays in place
 while each staged level is rewritten and tested. Encryption settings are
 preserved through the chain, and required passwords are obtained before writes.
 Input fingerprints and the original root fingerprint are checked before commit.
-Backups are enabled by default and remain beside the archive until removed.
+Retained backups are off by default, matching the normal update behavior of the
+Windows File Manager in
+[ArchiveFolderOut.cpp](../CPP/7zip/UI/Agent/ArchiveFolderOut.cpp) and
+[WorkDir.cpp](../CPP/7zip/UI/Common/WorkDir.cpp). VibeZip still verifies each staged
+archive and uses atomic replacement. The transaction directory is removed on
+normal completion or failure; an interrupted process can leave staging behind.
+
+Settings can explicitly enable a full backup of the outermost archive before
+each replacement. These copies are named `<archive>.backup-<UUID>` beside that
+archive and remain until manually removed. They are separate from staging and
+are excluded from temporary-file cleanup. The new opt-in uses
+`archiveBackupsEnabled`; the previous default-enabled `keepBackups` preference
+is not carried forward. Existing backup files are never deleted by this change.
 
 After the root replacement, the service invalidates and reopens affected
 sessions from outermost to innermost. A refresh failure is reported separately:

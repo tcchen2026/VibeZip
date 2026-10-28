@@ -207,6 +207,7 @@
 "Item" = "项目";
 "Items" = "项目";
 "Keep a backup before updating an archive" = "更新压缩文件前保留备份";
+"Each edit keeps a full backup beside the archive until you delete it." = "每次编辑都会在压缩文件旁保留一份完整备份，直到你手动删除。";
 "Last operation log" = "上次操作日志";
 "Licensed under LGPL 2.1 or later" = "根据 LGPL 2.1 或更高版本许可";
 "Link" = "链接";

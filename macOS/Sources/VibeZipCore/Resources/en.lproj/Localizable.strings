@@ -207,6 +207,7 @@
 "Item" = "Item";
 "Items" = "Items";
 "Keep a backup before updating an archive" = "Keep a backup before updating an archive";
+"Each edit keeps a full backup beside the archive until you delete it." = "Each edit keeps a full backup beside the archive until you delete it.";
 "Last operation log" = "Last operation log";
 "Licensed under LGPL 2.1 or later" = "Licensed under LGPL 2.1 or later";
 "Link" = "Link";

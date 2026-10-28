@@ -173,7 +173,8 @@ enum Dialogs {
         let defaults = UserDefaults.standard
         let form = FormView()
         let backups = NSButton(checkboxWithTitle: L10n.tr("Keep a backup before updating an archive"), target: nil, action: nil)
-        backups.state = defaults.bool(forKey: "keepBackups") ? .on : .off
+        backups.state = defaults.bool(forKey: "archiveBackupsEnabled") ? .on : .off
+        backups.toolTip = L10n.tr("Each edit keeps a full backup beside the archive until you delete it.")
         let hidden = NSButton(checkboxWithTitle: L10n.tr("Show Hidden Files"), target: nil, action: nil)
         hidden.state = defaults.bool(forKey: "showHidden") ? .on : .off
         let cap = NSTextField(string: String(defaults.integer(forKey: "extractionLimitGiB")))
@@ -208,7 +209,7 @@ enum Dialogs {
             guard let value = Int(cap.stringValue), (1...100_000).contains(value) else {
                 UIFormat.error(FMError.message(L10n.tr("The extraction limit must be between 1 and 100,000 GiB."))); continue
             }
-            defaults.set(backups.state == .on, forKey: "keepBackups")
+            defaults.set(backups.state == .on, forKey: "archiveBackupsEnabled")
             defaults.set(hidden.state == .on, forKey: "showHidden")
             defaults.set(value, forKey: "extractionLimitGiB")
             return true

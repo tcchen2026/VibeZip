@@ -27,7 +27,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private var temporaryFiles: [ScratchDirectory] = []
     var activePane: PaneController { usesTwoPanes ? (focusedPane ?? left) : left }
     var panes: [PaneController] { [left, right] }
-    var keepBackups: Bool { UserDefaults.standard.bool(forKey: "keepBackups") }
+    var keepBackups: Bool { UserDefaults.standard.bool(forKey: "archiveBackupsEnabled") }
     var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 || settingsCleanupToken != nil }
     var canAcceptCommands: Bool { !isBusy && window?.attachedSheet == nil && NSApp.modalWindow == nil }
 
