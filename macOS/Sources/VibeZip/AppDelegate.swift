@@ -7,7 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var aboutWindow: AboutWindow?
     private var pendingURLs: [URL] = []
     func applicationDidFinishLaunching(_ notification: Notification) {
-        UserDefaults.standard.register(defaults: ["showHidden": false, "archiveBackupsEnabled": false,
+        UserDefaults.standard.register(defaults: ["showHidden": false, "temporaryArchiveBackupsEnabled": false,
             "extractionLimitGiB": 100, "browserViewStyle": BrowserViewStyle.details.rawValue])
         do {
             let engine = try Engine(libraryURL: Engine.locate())

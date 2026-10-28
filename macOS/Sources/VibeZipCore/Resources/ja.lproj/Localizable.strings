@@ -49,7 +49,7 @@
 "An output file or volume already exists." = "出力ファイルまたは分割ファイルがすでに存在します。";
 "An output volume already exists." = "出力先の分割ファイルがすでに存在します。";
 "Archive Formats" = "アーカイブ形式";
-"Archive backups" = "アーカイブのバックアップ";
+"Recovery copies" = "復元用コピー";
 "Archive format" = "アーカイブ形式";
 "Archive manager for macOS" = "macOS 用アーカイブマネージャ";
 "Archive password" = "アーカイブのパスワード";
@@ -59,7 +59,7 @@
 "Automatic" = "自動";
 "BZip2 (one file)" = "BZip2（単一ファイル）";
 "Back" = "戻る";
-"Backup: %@\n" = "バックアップ：%@\n";
+"Recovery copy: %@\n" = "復元用コピー：%@\n";
 "Binary · First 16 KiB" = "バイナリ · 先頭 16 KiB";
 "Blocks" = "ブロック";
 "Bring All to Front" = "すべてを手前に移動";
@@ -206,8 +206,8 @@
 "Invert Selection" = "選択を反転";
 "Item" = "項目";
 "Items" = "項目";
-"Keep a backup before updating an archive" = "アーカイブの更新前にバックアップを保存";
-"Each edit keeps a full backup beside the archive until you delete it." = "編集のたびにアーカイブ全体のバックアップが同じ場所に保存され、手動で削除するまで残ります。";
+"Keep a temporary recovery copy when editing archives" = "アーカイブの編集時に一時的な復元用コピーを保存";
+"macOS or Clean Temporary Files may remove recovery copies." = "macOS や一時ファイルのクリーンアップにより、復元用コピーが削除されることがあります。";
 "Last operation log" = "前回の操作ログ";
 "Licensed under LGPL 2.1 or later" = "LGPL 2.1 以降のライセンスで提供";
 "Link" = "リンク";
@@ -404,7 +404,7 @@
 "VibeZip is now the default for %@ files." = "%@ ファイルのデフォルトアプリを VibeZip に設定しました。";
 "VibeZip is the default for %@ of %@ selected formats. No further changes were requested." = "選択した %2$@ 形式のうち %1$@ 形式で VibeZip がデフォルトです。残りの変更は要求していません。";
 "VibeZip is the default for %@ of %@ selected formats." = "選択した %2$@ 形式のうち %1$@ 形式で VibeZip がデフォルトです。";
-"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused temporary files; files still in use are kept." = "VibeZip はプレビュー、入れ子のアーカイブ、展開のために一時ファイルを保存する場合があります。クリーンアップでは未使用の一時ファイルのみ削除し、使用中のファイルは保持します。";
+"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused files, including recovery copies; files still in use are kept." = "VibeZip はプレビュー、入れ子のアーカイブ、展開に一時ファイルを使用する場合があります。クリーンアップでは復元用コピーを含む未使用のファイルを削除し、使用中のファイルは保持します。";
 "View VibeZip on GitHub" = "GitHub で VibeZip を見る";
 "View" = "表示";
 "Volume numbers are not consecutive. A volume is missing or duplicated." = "分割ファイルの番号が連続していません。欠落または重複があります。";
@@ -419,8 +419,7 @@
 "Yes" = "はい";
 "ZIP AES passwords can contain at most 99 characters." = "ZIP AES のパスワードは最大 99 文字です。";
 "Zoom" = "拡大／縮小";
-"\nA backup of the original archive will be kept." = "\n元のアーカイブのバックアップを保存します。";
-"\nArchive backups are currently disabled." = "\n現在、アーカイブのバックアップは無効です。";
+"\nA temporary recovery copy of the original archive will be kept." = "\n元のアーカイブの復元用コピーを一時的に保存します。";
 "\nCompleted." = "\n完了しました。";
 "\n\nReveal in Finder will show the containing archive." = "\n\n「Finder に表示」では、このファイルを含むアーカイブが表示されます。";
 "“%@” isn't an archive type VibeZip recognizes. Would you like to preview this file?" = "「%@」は VibeZip が認識できるアーカイブ形式ではありません。このファイルをプレビューしますか？";

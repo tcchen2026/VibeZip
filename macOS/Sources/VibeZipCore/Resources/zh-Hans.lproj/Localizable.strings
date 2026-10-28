@@ -49,7 +49,7 @@
 "An output file or volume already exists." = "输出文件或分卷已存在。";
 "An output volume already exists." = "输出分卷已存在。";
 "Archive Formats" = "压缩文件格式";
-"Archive backups" = "压缩文件备份";
+"Recovery copies" = "恢复副本";
 "Archive format" = "压缩文件格式";
 "Archive manager for macOS" = "macOS 压缩文件管理器";
 "Archive password" = "压缩文件密码";
@@ -59,7 +59,7 @@
 "Automatic" = "自动";
 "BZip2 (one file)" = "BZip2（单个文件）";
 "Back" = "后退";
-"Backup: %@\n" = "备份：%@\n";
+"Recovery copy: %@\n" = "恢复副本：%@\n";
 "Binary · First 16 KiB" = "二进制 · 前 16 KiB";
 "Blocks" = "区块";
 "Bring All to Front" = "前置全部窗口";
@@ -206,8 +206,8 @@
 "Invert Selection" = "反向选择";
 "Item" = "项目";
 "Items" = "项目";
-"Keep a backup before updating an archive" = "更新压缩文件前保留备份";
-"Each edit keeps a full backup beside the archive until you delete it." = "每次编辑都会在压缩文件旁保留一份完整备份，直到你手动删除。";
+"Keep a temporary recovery copy when editing archives" = "编辑压缩文件时保留临时恢复副本";
+"macOS or Clean Temporary Files may remove recovery copies." = "macOS 或临时文件清理功能可能会移除恢复副本。";
 "Last operation log" = "上次操作日志";
 "Licensed under LGPL 2.1 or later" = "根据 LGPL 2.1 或更高版本许可";
 "Link" = "链接";
@@ -404,7 +404,7 @@
 "VibeZip is now the default for %@ files." = "VibeZip 已设为 %@ 文件的默认应用。";
 "VibeZip is the default for %@ of %@ selected formats. No further changes were requested." = "VibeZip 已是所选 %2$@ 种格式中 %1$@ 种的默认应用。未继续请求其他更改。";
 "VibeZip is the default for %@ of %@ selected formats." = "VibeZip 已是所选 %2$@ 种格式中 %1$@ 种的默认应用。";
-"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused temporary files; files still in use are kept." = "VibeZip 可能会为预览、嵌套压缩文件和解压操作存储临时文件。清理仅删除未使用的临时文件，正在使用的文件会保留。";
+"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused files, including recovery copies; files still in use are kept." = "VibeZip 可能会为预览、嵌套压缩文件和解压保存临时文件。清理会移除未使用的文件，包括恢复副本；正在使用的文件会保留。";
 "View VibeZip on GitHub" = "在 GitHub 上查看 VibeZip";
 "View" = "显示";
 "Volume numbers are not consecutive. A volume is missing or duplicated." = "分卷编号不连续，可能有分卷缺失或重复。";
@@ -419,8 +419,7 @@
 "Yes" = "是";
 "ZIP AES passwords can contain at most 99 characters." = "ZIP AES 密码最多可包含 99 个字符。";
 "Zoom" = "缩放";
-"\nA backup of the original archive will be kept." = "\n将保留原始压缩文件的备份。";
-"\nArchive backups are currently disabled." = "\n当前已禁用压缩文件备份。";
+"\nA temporary recovery copy of the original archive will be kept." = "\n将临时保留原压缩文件的恢复副本。";
 "\nCompleted." = "\n已完成。";
 "\n\nReveal in Finder will show the containing archive." = "\n\n“在访达中显示”会显示包含此文件的压缩文件。";
 "“%@” isn't an archive type VibeZip recognizes. Would you like to preview this file?" = "“%@”不是 VibeZip 可识别的压缩文件类型。要预览此文件吗？";

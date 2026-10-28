@@ -1,6 +1,7 @@
 import Foundation
 
 public struct MutationResult {
+    /// Optional recovery copy in managed temporary storage; cleanup may remove it.
     public let backup: URL?
     public let log: String
 }
@@ -451,14 +452,23 @@ public final class ArchiveService {
         try checkInputs(snapshots); try token.check()
         guard try FileFingerprint(root) == fingerprint else { throw FMError.message(L10n.tr("The original archive changed. No changes were committed.")) }
         var backupURL: URL?
+        var recovery: ScratchDirectory?
+        defer { withExtendedLifetime(recovery) {} }
         if backup {
-            let destination = root.deletingLastPathComponent().appendingPathComponent(root.lastPathComponent + ".backup-" + UUID().uuidString)
-            try FileManager.default.copyItem(at: root, to: destination); backupURL = destination; output(L10n.tr("Backup: \(destination.path)\n"))
+            let directory = try ScratchDirectory(label: "recovery")
+            recovery = directory
+            let destination = directory.url.appendingPathComponent(root.lastPathComponent)
+            try FileManager.default.copyItem(at: root, to: destination)
+            backupURL = destination
         }
         if let permissions = attributes[.posixPermissions] { try FileManager.default.setAttributes([.posixPermissions: permissions], ofItemAtPath: staged.path) }
         try token.check()
         guard try FileFingerprint(root) == fingerprint else { throw FMError.message(L10n.tr("The original archive changed before commit. No changes were committed.")) }
         try SafeFileSystem.atomicReplace(staged, destination: root)
+        // Retain only successful edits' recovery copies. Before commit, failure
+        // or cancellation releases the directory and the original stays intact.
+        _ = recovery?.retainOnDisk()
+        if let backupURL = backupURL { output(L10n.tr("Recovery copy: \(backupURL.path)\n")) }
         // Rebind live ancestors/children after the single root commit. A failed
         // refresh cannot undo a completed commit, so report it separately.
         var log = L10n.tr("Changes committed. \(chain.count) archive level(s) verified.\n")

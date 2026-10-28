@@ -92,9 +92,11 @@ grant folder access. Files opened from Finder use the existing user-selected-fil
 ## Persistence and cleanup
 
 Preferences, authorization history and window state stay in local preferences.
-Retained archive backups are off by default. Enabling them in Settings keeps a
-full copy beside the outermost archive after each edit; they are not temporary
-files. Staging and verification remain enabled regardless of this preference.
+Temporary archive recovery copies are off by default. Enabling them in Settings
+keeps a full copy of the outermost archive in the app's managed temporary folder
+after a successful edit. Staging and verification remain enabled regardless of
+this preference. The container's temporary directory needs no extra folder grant;
+editing still requires access to the original archive's parent for atomic replacement.
 Passwords live in session memory and can be cleared through the Tools menu or
 by quitting; they are not written to command arguments, preferences or logs.
 This is not a guarantee of cryptographic zeroization of all process memory.
@@ -108,13 +110,16 @@ A crash releases the locks but can leave files behind.
 
 Settings → General can show this folder in Finder or clean unused copies.
 Its MB/GB total is a background snapshot of regular-file sizes, including active
-copies, and does not read file contents or follow symbolic links.
+copies and optional recovery copies, and does not read file contents or follow
+symbolic links. Completed recovery copies are eligible for cleanup and may also
+be purged by macOS; they are not durable backups. See
+[Apple's temporary-file guidance](https://developer.apple.com/documentation/foundation/using-the-file-system-effectively).
 Cleanup only visits matching VibeZip work directories inside this dedicated
 folder and skips locks held by this or another running process. It ignores
 unrelated files and top-level symlinks, and removes links inside a discarded
 directory without following their targets. Cancellation is checked between files.
 It does not sweep the system temporary directory, older builds' temporary folders,
-archive staging beside user files, or backups. There is no persistent crash-recovery
+archive staging beside user files, or legacy sibling backups. There is no persistent crash-recovery
 journal or automatic startup scavenger, and cleanup is not secure erasure.
 
 Sources: [TemporaryFiles.swift](../macOS/Sources/VibeZipCore/TemporaryFiles.swift)

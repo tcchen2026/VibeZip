@@ -65,7 +65,7 @@ flowchart LR
     D --> E[Replace middle entry in staged outer]
     E --> F[Test outer]
     F --> G[Check inputs and root fingerprint]
-    G --> H[Optional backup and one root replacement]
+    G --> H[Optional temporary recovery copy and one root replacement]
 ```
 
 The transaction directory is beside the outer archive, allowing a final
@@ -80,12 +80,19 @@ Windows File Manager in
 archive and uses atomic replacement. The transaction directory is removed on
 normal completion or failure; an interrupted process can leave staging behind.
 
-Settings can explicitly enable a full backup of the outermost archive before
-each replacement. These copies are named `<archive>.backup-<UUID>` beside that
-archive and remain until manually removed. They are separate from staging and
-are excluded from temporary-file cleanup. The new opt-in uses
-`archiveBackupsEnabled`; the previous default-enabled `keepBackups` preference
-is not carried forward. Existing backup files are never deleted by this change.
+Settings can explicitly enable a temporary recovery copy of the outermost
+archive. It is copied into `<app-temp>/VibeZip/VibeZip-recovery-<UUID>/<archive>`
+before replacement and retained only after commit succeeds. Failure or cancellation
+before commit removes the copy. A directory lock keeps cleanup from removing it
+while the edit is in progress. Once the operation finishes, it is included in
+temporary-file usage and **Clean Temporary Files**; macOS may also purge it.
+It is for short-term recovery, not durable version history.
+
+Transaction staging still stays beside the original for same-filesystem atomic
+replacement, and editing still requires access to that containing folder.
+The temporary-copy opt-in uses `temporaryArchiveBackupsEnabled`; earlier retained
+backup preferences are not carried forward. Legacy `<archive>.backup-<UUID>`
+files beside archives are never moved or removed automatically.
 
 After the root replacement, the service invalidates and reopens affected
 sessions from outermost to innermost. A refresh failure is reported separately:

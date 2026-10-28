@@ -172,13 +172,13 @@ enum Dialogs {
     static func preferences(folderAccess: Bool = false, onTemporaryCleanup: @escaping (CancellationToken?) -> Void = { _ in }) -> Bool {
         let defaults = UserDefaults.standard
         let form = FormView()
-        let backups = NSButton(checkboxWithTitle: L10n.tr("Keep a backup before updating an archive"), target: nil, action: nil)
-        backups.state = defaults.bool(forKey: "archiveBackupsEnabled") ? .on : .off
-        backups.toolTip = L10n.tr("Each edit keeps a full backup beside the archive until you delete it.")
+        let backups = NSButton(checkboxWithTitle: L10n.tr("Keep a temporary recovery copy when editing archives"), target: nil, action: nil)
+        backups.state = defaults.bool(forKey: "temporaryArchiveBackupsEnabled") ? .on : .off
+        backups.toolTip = L10n.tr("macOS or Clean Temporary Files may remove recovery copies.")
         let hidden = NSButton(checkboxWithTitle: L10n.tr("Show Hidden Files"), target: nil, action: nil)
         hidden.state = defaults.bool(forKey: "showHidden") ? .on : .off
         let cap = NSTextField(string: String(defaults.integer(forKey: "extractionLimitGiB")))
-        form.row(L10n.tr("Archive backups"), backups); form.row(L10n.tr("Hidden items"), hidden); form.row(L10n.tr("Extraction limit (GiB)"), cap)
+        form.row(L10n.tr("Recovery copies"), backups); form.row(L10n.tr("Hidden items"), hidden); form.row(L10n.tr("Extraction limit (GiB)"), cap)
         let temporaryFiles = TemporaryFilesView()
         form.row("", temporaryFiles, height: 160)
         let defaultApplication = DefaultApplicationView()
@@ -209,7 +209,7 @@ enum Dialogs {
             guard let value = Int(cap.stringValue), (1...100_000).contains(value) else {
                 UIFormat.error(FMError.message(L10n.tr("The extraction limit must be between 1 and 100,000 GiB."))); continue
             }
-            defaults.set(backups.state == .on, forKey: "archiveBackupsEnabled")
+            defaults.set(backups.state == .on, forKey: "temporaryArchiveBackupsEnabled")
             defaults.set(hidden.state == .on, forKey: "showHidden")
             defaults.set(value, forKey: "extractionLimitGiB")
             return true

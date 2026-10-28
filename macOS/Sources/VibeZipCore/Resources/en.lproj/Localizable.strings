@@ -49,7 +49,7 @@
 "An output file or volume already exists." = "An output file or volume already exists.";
 "An output volume already exists." = "An output volume already exists.";
 "Archive Formats" = "Archive Formats";
-"Archive backups" = "Archive backups";
+"Recovery copies" = "Recovery copies";
 "Archive format" = "Archive format";
 "Archive manager for macOS" = "Archive manager for macOS";
 "Archive password" = "Archive password";
@@ -59,7 +59,7 @@
 "Automatic" = "Automatic";
 "BZip2 (one file)" = "BZip2 (one file)";
 "Back" = "Back";
-"Backup: %@\n" = "Backup: %@\n";
+"Recovery copy: %@\n" = "Recovery copy: %@\n";
 "Binary · First 16 KiB" = "Binary · First 16 KiB";
 "Blocks" = "Blocks";
 "Bring All to Front" = "Bring All to Front";
@@ -206,8 +206,8 @@
 "Invert Selection" = "Invert Selection";
 "Item" = "Item";
 "Items" = "Items";
-"Keep a backup before updating an archive" = "Keep a backup before updating an archive";
-"Each edit keeps a full backup beside the archive until you delete it." = "Each edit keeps a full backup beside the archive until you delete it.";
+"Keep a temporary recovery copy when editing archives" = "Keep a temporary recovery copy when editing archives";
+"macOS or Clean Temporary Files may remove recovery copies." = "macOS or Clean Temporary Files may remove recovery copies.";
 "Last operation log" = "Last operation log";
 "Licensed under LGPL 2.1 or later" = "Licensed under LGPL 2.1 or later";
 "Link" = "Link";
@@ -404,7 +404,7 @@
 "VibeZip is now the default for %@ files." = "VibeZip is now the default for %@ files.";
 "VibeZip is the default for %@ of %@ selected formats. No further changes were requested." = "VibeZip is the default for %@ of %@ selected formats. No further changes were requested.";
 "VibeZip is the default for %@ of %@ selected formats." = "VibeZip is the default for %@ of %@ selected formats.";
-"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused temporary files; files still in use are kept." = "VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused temporary files; files still in use are kept.";
+"VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused files, including recovery copies; files still in use are kept." = "VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused files, including recovery copies; files still in use are kept.";
 "View VibeZip on GitHub" = "View VibeZip on GitHub";
 "View" = "View";
 "Volume numbers are not consecutive. A volume is missing or duplicated." = "Volume numbers are not consecutive. A volume is missing or duplicated.";
@@ -419,8 +419,7 @@
 "Yes" = "Yes";
 "ZIP AES passwords can contain at most 99 characters." = "ZIP AES passwords can contain at most 99 characters.";
 "Zoom" = "Zoom";
-"\nA backup of the original archive will be kept." = "\nA backup of the original archive will be kept.";
-"\nArchive backups are currently disabled." = "\nArchive backups are currently disabled.";
+"\nA temporary recovery copy of the original archive will be kept." = "\nA temporary recovery copy of the original archive will be kept.";
 "\nCompleted." = "\nCompleted.";
 "\n\nReveal in Finder will show the containing archive." = "\n\nReveal in Finder will show the containing archive.";
 "“%@” isn't an archive type VibeZip recognizes. Would you like to preview this file?" = "“%@” isn't an archive type VibeZip recognizes. Would you like to preview this file?";

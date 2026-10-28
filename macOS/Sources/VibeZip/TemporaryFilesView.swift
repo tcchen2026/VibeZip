@@ -20,7 +20,7 @@ final class TemporaryFilesView: NSView {
         heading.setContentHuggingPriority(.defaultLow, for: .horizontal)
         usage.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular); usage.textColor = .secondaryLabelColor
         let header = NSStackView(views: [heading, usage]); header.spacing = 12
-        let description = NSTextField(wrappingLabelWithString: L10n.tr("VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused temporary files; files still in use are kept."))
+        let description = NSTextField(wrappingLabelWithString: L10n.tr("VibeZip may store temporary files for previews, nested archives, and extraction. Clean removes unused files, including recovery copies; files still in use are kept."))
         description.font = .systemFont(ofSize: 12); description.textColor = .secondaryLabelColor
         let showButton = NSButton(title: L10n.tr("Show Temporary Folder"), target: self, action: #selector(showFolder))
         cleanButton.target = self; cleanButton.action = #selector(clean)

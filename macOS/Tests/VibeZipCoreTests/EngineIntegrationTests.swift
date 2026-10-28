@@ -86,6 +86,7 @@ final class EngineIntegrationTests: XCTestCase {
         let original = try Data(contentsOf: archive())
         let two = try file("two.txt", "new")
         let added = try service.add([two], to: archive(), backup: true)
+        defer { if let backup = added.backup { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) } }
         XCTAssertNotNil(added.backup); XCTAssertEqual(try Data(contentsOf: added.backup!), original)
         XCTAssertEqual(try service.list(archive()).entries.count, 2)
         _ = try service.rename("two.txt", to: "renamed.txt", in: archive())
@@ -330,6 +331,7 @@ final class EngineIntegrationTests: XCTestCase {
         XCTAssertFalse(SafeFileSystem.exists(leaf.url.deletingLastPathComponent()))
         try Data("edited through three levels".utf8).write(to: text)
         let result = try service.updateFile(text, path: "note.txt", in: leaf.url, password: zip.password, backup: true)
+        defer { if let backup = result.backup { try? FileManager.default.removeItem(at: backup.deletingLastPathComponent()) } }
         XCTAssertEqual(try Data(contentsOf: result.backup!), original)
         XCTAssertTrue(result.log.contains(L10n.tr("Changes committed. \(3) archive level(s) verified.\n")))
         try service.extract(leaf.url, to: output("edited"), password: zip.password)

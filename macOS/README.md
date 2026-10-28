@@ -84,13 +84,14 @@ A compact MB/GB total shows temporary file sizes, including files still in use,
 and refreshes when Settings opens and after cleanup.
 VibeZip keeps disposable copies in its own folder under the macOS app temporary
 directory. Cleanup removes unused copies while preserving files held by open
-archives and running operations. Archive backups and staging beside user files
-are outside this cleanup.
+archives and running operations. Legacy backups and transaction staging beside
+user files are outside this cleanup.
 
-Archive edits use temporary staging and verification, with retained backups off
-by default. To keep a recovery copy after each edit, enable **Keep a backup before
-updating an archive** in Settings → General. Each copy stays beside the outermost
-archive as `<archive>.backup-<UUID>` until you remove it.
+Archive edits use temporary staging and verification. Optional recovery copies
+are off by default. Enable **Keep a temporary recovery copy when editing archives**
+in Settings → General to keep a copy of the outermost archive after each successful
+edit. Find it through **Show Temporary Folder**. These copies count toward temp
+usage and are removed by **Clean Temporary Files**; macOS may also clear them.
 
 **Set VibeZip as Default** in Settings → General starts with `.zip/.7z/.rar`
 selected; clicking the button applies all three. Individual formats remain in the

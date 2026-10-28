@@ -27,7 +27,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private var temporaryFiles: [ScratchDirectory] = []
     var activePane: PaneController { usesTwoPanes ? (focusedPane ?? left) : left }
     var panes: [PaneController] { [left, right] }
-    var keepBackups: Bool { UserDefaults.standard.bool(forKey: "archiveBackupsEnabled") }
+    var keepBackups: Bool { UserDefaults.standard.bool(forKey: "temporaryArchiveBackupsEnabled") }
     var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 || settingsCleanupToken != nil }
     var canAcceptCommands: Bool { !isBusy && window?.attachedSheet == nil && NSApp.modalWindow == nil }
 
@@ -513,7 +513,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         guard NSApp.keyWindow === window, !isBusy, !activePane.selectedRows.isEmpty else { return }
         let rows = activePane.selectedRows
         if let archive = activePane.location.archive {
-            guard archive.canModify, UIFormat.confirm(L10n.tr("Delete \(rows.count) items from the archive?"), L10n.tr("All contents of the selected folders will also be deleted.") + (keepBackups ? L10n.tr("\nA backup of the original archive will be kept.") : L10n.tr("\nArchive backups are currently disabled.")), action: L10n.tr("Delete")) else { return }
+            guard archive.canModify, UIFormat.confirm(L10n.tr("Delete \(rows.count) items from the archive?"), L10n.tr("All contents of the selected folders will also be deleted.") + (keepBackups ? L10n.tr("\nA temporary recovery copy of the original archive will be kept.") : ""), action: L10n.tr("Delete")) else { return }
             let service = self.service; let backup = keepBackups
             mutateJob(L10n.tr("Delete from archive"), archive: archive) { token, output in
                 try service.delete(rows.map(\.path), from: archive.url, password: archive.password, backup: backup, token: token, output: output)
