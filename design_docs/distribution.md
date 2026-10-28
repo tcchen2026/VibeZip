@@ -49,13 +49,21 @@ build/sign/notarize/artifact pattern in
 [VibeOffice's macOS workflow](https://github.com/tcchen2026/VibeOffice/blob/main/.github/workflows/macos.yml).
 It has **only `workflow_dispatch`**. Pushes, pull requests and tags do not build.
 
-On GitHub, select **Actions → macOS DMG → Run workflow**. The workflow uses a
-macOS 26 runner to build both architectures and package the DMG. It does not
-run test suites or UI automation. Every successful run uploads the DMG and checksum as an Actions artifact.
-The optional **Publish release** input creates or updates a release using the
-built app's `vYYYY.MM.DD-abcdef` version, matching VibeOffice's format with
-VibeZip's own UTC commit date and six-character hash. It defaults to false;
-unsigned builds cannot publish.
+On GitHub, select **Actions → macOS → Run workflow**. Like VibeOffice, each manual
+run builds both architectures and uses the `release` environment's signing
+secrets to choose between an unsigned app artifact and a notarized public DMG.
+VibeZip uses a macOS 26 runner and checks for Xcode 26 and the macOS 26 SDK before
+building. Compiler caches and native build outputs are reused only within the
+same runner architecture and Xcode build; app bundles and signing material are
+excluded from the cache. It does not run test suites or UI automation.
+
+Without a Developer ID certificate, the workflow uploads
+`VibeZip-macOS-unsigned.zip` and its checksum as the `VibeZip-macOS-unsigned`
+artifact. With signing credentials, it uploads the notarized DMG and checksum
+as `VibeZip-macOS`, then automatically creates or updates a GitHub release using
+the built app's `vYYYY.MM.DD-abcdef` version. The format matches VibeOffice, with
+VibeZip's own UTC commit date and six-character hash. Repeating a manual run for
+the same commit replaces the release assets. Unsigned builds cannot publish.
 **Pre-release** controls the designation when creating a release.
 
 Create a GitHub environment named `release` and configure these secrets there:
@@ -68,11 +76,15 @@ Create a GitHub environment named `release` and configure these secrets there:
 | `ASC_ISSUER_ID` | API issuer ID |
 | `ASC_KEY_P8` | Raw PEM contents of the API private key |
 
-Without the P12 secret, the workflow produces an unsigned test DMG artifact.
-With it, all notarization secrets are required and signing/notarization failures
+With the P12 secret, all notarization secrets are required and signing/notarization failures
 fail the workflow; they do not fall back to an unsigned public release. The
 certificate is imported into a temporary keychain and signing material is removed
 in an `always()` cleanup step. No App Store upload is included in this workflow.
+
+Secret names match VibeOffice, but the `release` environment and its secrets must
+be configured for the VibeZip repository as well (or supplied through organization
+secrets accessible to it). App Store package signing and upload remain separate
+release work; this workflow only handles direct distribution.
 
 The repository remote for this project is `git@github.com:tcchen2026/VibeZip.git`.
 The previous fork remote remains `upstream`. Committing locally neither pushes

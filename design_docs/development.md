@@ -95,10 +95,12 @@ packaging changes should check the affected scripts and produced resources.
 
 ## Packaging and licensing material
 
-The [macOS DMG workflow](../.github/workflows/macos.yml) runs only when manually
+The [macOS workflow](../.github/workflows/macos.yml) runs only when manually
 dispatched. It builds and packages without running tests or UI automation. See
 [DMG distribution](distribution.md) for the release environment, signing secrets
-and optional publication. App Sandbox stays enabled for direct distribution.
+and publication. Manual runs with release credentials publish the notarized DMG;
+runs without them keep an unsigned app artifact. App Sandbox stays enabled for
+direct distribution.
 
 [build.sh](../macOS/build.sh) creates the app in a staging directory and signs the
 engine and app with an ad-hoc identity for local use. It packages the engine,

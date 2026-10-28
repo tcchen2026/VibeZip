@@ -27,8 +27,9 @@ version. Bundled corresponding source preserves it for rebuilds without Git.
 
 For a local test DMG, run `bash Scripts/package-dmg.sh --unsigned`. This builds
 both architectures and writes `dist/VibeZip-macOS-unsigned.dmg` plus a checksum.
-The GitHub **macOS DMG** workflow runs manually through **Actions → Run workflow**;
-it never runs on push. With release credentials it signs and notarizes the DMG.
+The GitHub **macOS** workflow runs manually through **Actions → Run workflow**;
+it never runs on push. Like VibeOffice, it publishes a signed, notarized DMG when
+release credentials are configured, or keeps an unsigned app ZIP artifact otherwise.
 See [DMG distribution](../design_docs/distribution.md) for secrets and release options.
 
 ## Use
