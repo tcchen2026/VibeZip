@@ -563,7 +563,14 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     func receiveDropped(_ urls: [URL], in pane: PaneController, into destination: BrowserLocation) -> Bool {
         guard canAcceptCommands, !hasActiveOperations, !urls.isEmpty,
-              !destination.isEmpty, destination.archive?.canModify != false else { return false }
+              destination.archive?.canModify != false else { return false }
+        if destination.isEmpty {
+            guard urls.count == 1, let url = urls.first else { return false }
+            activate(pane)
+            // The drop grants access to this URL, not its parent folder.
+            openURL(url, in: pane, userSelected: true)
+            return true
+        }
         activate(pane)
         guard acceptUserSelectedURLs(urls) else { return false }
         if let archive = destination.archive {

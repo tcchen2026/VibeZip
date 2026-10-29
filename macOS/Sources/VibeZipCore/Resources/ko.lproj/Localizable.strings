@@ -40,7 +40,6 @@
 "Allow Access" = "접근 허용";
 "Allow Folder Access" = "폴더 접근 허용";
 "Allow Folder Access…" = "폴더 접근 허용…";
-"Allow VibeZip to browse a folder and its contents.\nYour saved folders will appear in the sidebar." = "VibeZip이 폴더와 그 내용을 탐색하도록 허용하세요.\n저장한 폴더는 사이드바에 표시됩니다.";
 "Allowed" = "허용됨";
 "An archive path is both a file and a folder: %@" = "압축 파일의 경로가 파일과 폴더를 동시에 나타냅니다: %@";
 "An input changed while it was being archived: %@" = "압축하는 동안 입력 파일이 변경되었습니다: %@";
@@ -91,8 +90,6 @@
 "Choose a destination and how to handle existing files." = "대상 위치와 기존 파일 처리 방법을 선택하세요.";
 "Choose a different name outside the source folder." = "원본 폴더 외부에서 다른 이름을 선택하세요.";
 "Choose a folder VibeZip can browse and manage. You can change folder access in Settings." = "VibeZip이 탐색하고 관리할 수 있는 폴더를 선택하세요. 설정에서 폴더 접근 권한을 변경할 수 있습니다.";
-"Choose a folder to allow access." = "접근을 허용할 폴더를 선택하세요.";
-"Choose a folder to get started" = "시작할 폴더를 선택하세요";
 "Choose an accessible folder." = "접근 가능한 폴더를 선택하세요.";
 "Choose files to add" = "추가할 파일 선택";
 "Choose formats to open with VibeZip. macOS may ask you to confirm each format." = "VibeZip으로 열 형식을 선택하세요. macOS에서 각 형식에 대해 확인을 요청할 수 있습니다.";
@@ -138,6 +135,7 @@
 "Details" = "세부사항";
 "Details…" = "세부사항…";
 "Dictionary size" = "사전 크기";
+"Drop an archive here to open it.\nChoose a folder to browse its contents." = "압축 파일을 여기에 놓아 여세요.\n폴더를 선택하여 내용을 탐색하세요.";
 "Drop files here or use Add to put something in it." = "파일을 여기에 드롭하거나 추가를 사용하여 파일을 넣으세요.";
 "Duplicate paths require selecting one entry at a time: %@" = "중복 경로가 있으면 한 번에 하나의 항목만 선택해야 합니다: %@";
 "Edit" = "편집";
@@ -248,6 +246,7 @@
 "Only regular files can be previewed." = "일반 파일만 미리 볼 수 있습니다.";
 "Open Archives" = "열린 압축 파일";
 "Open a regular archive file, not a symbolic link." = "심볼릭 링크가 아닌 일반 압축 파일을 여세요.";
+"Open an archive or choose a folder" = "압축 파일을 열거나 폴더를 선택하세요";
 "Open archive" = "압축 파일 열기";
 "Open as Archive" = "압축 파일로 열기";
 "Open nested archive" = "중첩 압축 파일 열기";

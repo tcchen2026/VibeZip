@@ -1,12 +1,12 @@
 VibeZip is a free, native archive manager for macOS 26 or later. No account, sign-in, subscription or in-app purchase is required.
 
 First launch and file access
-Choose a local folder using Choose Folder. VibeZip uses App Sandbox and works with files and folders authorized by the user. An empty first-launch browser is expected until a folder is chosen. Editing an archive can request access to its containing folder so the app can create and verify a staged update before replacing the original. This is not a request for Full Disk Access.
+Drop a single archive onto the empty window to open it, or click Add Folder… in the sidebar to browse a folder. VibeZip uses App Sandbox and works with files and folders authorized by the user. Opening a dropped archive does not require access to its parent folder. Editing an archive can request access to its containing folder so the app can create and verify a staged update before replacing the original. This is not a request for Full Disk Access.
 
 Suggested review flow
-1. Save and extract the attached review-sample.zip into a local folder, then authorize that folder in VibeZip. It contains demonstration text files and Samples/Nested.zip; no passwords or accounts are needed.
-2. Open Samples/Nested.zip in VibeZip and preview Readme.txt. To check nested browsing, open review-sample.zip itself, navigate to Samples, then open Nested.zip inside it.
-3. Select local text files and use Add to create a ZIP or 7z archive. The compression dialog also provides optional password encryption.
+1. Save the attached review-sample.zip and drop it onto the empty VibeZip window. It should open without a parent-folder access request. It contains demonstration text files and Samples/Nested.zip; no passwords or accounts are needed.
+2. Navigate to Samples, open Nested.zip inside the archive, then select Readme.txt and click Preview.
+3. Extract review-sample.zip into a local folder and authorize that folder in VibeZip. Select local text files and use Add to create a ZIP or 7z archive. The compression dialog also provides optional password encryption.
 4. Open the newly created ZIP. Drag another local file from Finder into the file list to add it, then use Test to check the archive. Existing names require update confirmation. Changes can also rename or delete entries in supported writable formats.
 5. Enable 2 Panels to browse an archive and a filesystem folder side by side. Settings manages saved folder access and temporary storage, including Show Temporary Folder and Clean Temporary Files.
 

@@ -98,6 +98,12 @@ read only and has no external-viewer button. Content limits are documented in
 
 ## Drag and drop
 
+An empty browser accepts one file or folder URL from Finder. A file opens through
+the same user-selected-file path as Browse, without requiring authorization for
+its parent folder. A dropped folder is explicitly authorized and browsed. Multiple
+URLs and file promises are rejected while there is no destination. This applies
+to an empty second pane as well as first launch.
+
 Drop files or folders from Finder into an open writable archive to add them to
 the current archive folder. Dropping onto a folder row or icon adds them inside
 that folder, including folders found through archive search. Icons, List and
@@ -154,10 +160,11 @@ The threshold and UI implementation are in
 
 ## First launch and About
 
-Without a restorable authorized directory, show **Choose a folder to get started**
-and a **Choose Folder…** button. Sidebar Favorites starts empty until access is
-granted; displaying a place never grants permission. A later launch restores the last available
-authorized directory. Settings exposes saved grants so users can understand and
+Without a restorable authorized directory, show **Open an archive or choose a folder**,
+an explanation of archive drops, and a **Choose Folder…** button. Sidebar Favorites
+starts empty until access is granted; displaying a place never grants permission.
+A later launch restores the last available authorized directory. Settings exposes
+saved grants so users can understand and
 change the app's access.
 
 The compact About window shows the app icon, name, version from the bundle,

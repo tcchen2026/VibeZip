@@ -19,12 +19,12 @@ for the process lifetime or until removed. Workers use that process access.
 
 | Situation | Behavior |
 | --- | --- |
-| No saved location | Show an empty browser with **Choose Folder…**; do not silently select Home or another directory |
+| No saved location | Show an empty browser accepting a single dropped archive or folder, with **Choose Folder…**; do not silently select Home or another directory |
 | Authorized folder chosen | Create and resolve a security-scoped bookmark, start access, then save it locally |
 | Restart | Resolve saved bookmarks and restore the last directory only if its authorized root and relative path are available |
 | Folder moved or bookmark stale | Use the resolved root; renew the bookmark when possible |
 | Folder offline or inaccessible | Keep its record visible as unavailable so access can be renewed or removed |
-| File selected individually | Retain access for the session; do not grant or persist access to its parent or siblings |
+| File selected individually, including a drop onto an empty pane | Retain access for the session; do not grant or persist access to its parent or siblings |
 | Grant removed | Remove the saved bookmark, stop its active scope and discard related single-file scopes; overlapping grants can still cover the path |
 
 Settings → Folder Access offers add, renew and remove actions. Saved records

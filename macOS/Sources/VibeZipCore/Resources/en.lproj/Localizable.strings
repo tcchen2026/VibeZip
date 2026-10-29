@@ -40,7 +40,6 @@
 "Allow Access" = "Allow Access";
 "Allow Folder Access" = "Allow Folder Access";
 "Allow Folder Access…" = "Allow Folder Access…";
-"Allow VibeZip to browse a folder and its contents.\nYour saved folders will appear in the sidebar." = "Allow VibeZip to browse a folder and its contents.\nYour saved folders will appear in the sidebar.";
 "Allowed" = "Allowed";
 "An archive path is both a file and a folder: %@" = "An archive path is both a file and a folder: %@";
 "An input changed while it was being archived: %@" = "An input changed while it was being archived: %@";
@@ -91,8 +90,6 @@
 "Choose a destination and how to handle existing files." = "Choose a destination and how to handle existing files.";
 "Choose a different name outside the source folder." = "Choose a different name outside the source folder.";
 "Choose a folder VibeZip can browse and manage. You can change folder access in Settings." = "Choose a folder VibeZip can browse and manage. You can change folder access in Settings.";
-"Choose a folder to allow access." = "Choose a folder to allow access.";
-"Choose a folder to get started" = "Choose a folder to get started";
 "Choose an accessible folder." = "Choose an accessible folder.";
 "Choose files to add" = "Choose files to add";
 "Choose formats to open with VibeZip. macOS may ask you to confirm each format." = "Choose formats to open with VibeZip. macOS may ask you to confirm each format.";
@@ -138,6 +135,7 @@
 "Details" = "Details";
 "Details…" = "Details…";
 "Dictionary size" = "Dictionary size";
+"Drop an archive here to open it.\nChoose a folder to browse its contents." = "Drop an archive here to open it.\nChoose a folder to browse its contents.";
 "Drop files here or use Add to put something in it." = "Drop files here or use Add to put something in it.";
 "Duplicate paths require selecting one entry at a time: %@" = "Duplicate paths require selecting one entry at a time: %@";
 "Edit" = "Edit";
@@ -248,6 +246,7 @@
 "Only regular files can be previewed." = "Only regular files can be previewed.";
 "Open Archives" = "Open Archives";
 "Open a regular archive file, not a symbolic link." = "Open a regular archive file, not a symbolic link.";
+"Open an archive or choose a folder" = "Open an archive or choose a folder";
 "Open archive" = "Open archive";
 "Open as Archive" = "Open as Archive";
 "Open nested archive" = "Open nested archive";

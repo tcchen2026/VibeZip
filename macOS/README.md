@@ -43,8 +43,11 @@ release verification.
 
 ## Use
 
-Choose a folder on first launch. Saved security-scoped bookmarks allow the app to
-restore the last authorized directory. Manage access in Settings → Folder Access.
+Drop a single archive onto the empty browser to open it, or choose or drop a folder
+to browse. Opening a dropped archive only grants access to that file; browsing its
+parent or editing the archive can require a separate folder selection. Saved
+security-scoped folder bookmarks allow the app to restore the last authorized
+directory. Manage access in Settings → Folder Access.
 
 The app follows your macOS language preferences, with English as the fallback.
 To choose a language specifically for VibeZip, use System Settings → General →

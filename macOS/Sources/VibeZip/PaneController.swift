@@ -284,7 +284,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         search.toolTip = location.archive == nil ? L10n.tr("Search names in this folder") : L10n.tr("Search names and paths throughout this archive")
         owner?.window?.toolbar?.validateVisibleItems()
         let id = UUID(); loadingID = id; status.summary = L10n.tr("Reading…")
-        if location.isEmpty { status.summary = L10n.tr("Choose a folder to allow access."); owner?.updateTitle(); return }
+        if location.isEmpty { status.summary = L10n.tr("Open an archive or choose a folder"); owner?.updateTitle(); return }
         let current = location
         let listingSnapshot = location.archive?.listing
         let showHidden = UserDefaults.standard.bool(forKey: "showHidden")
@@ -338,8 +338,8 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         table.enclosingScrollView?.isHidden = location.isEmpty || viewStyle == .icons
         gridScroll.isHidden = location.isEmpty || viewStyle != .icons
         emptyIcon.image = NSImage(systemSymbolName: query.isEmpty ? "folder" : "magnifyingglass", accessibilityDescription: nil)
-        emptyHeading.stringValue = location.isEmpty ? L10n.tr("Choose a folder to get started") : (query.isEmpty ? L10n.tr("Empty Folder") : L10n.tr("No Results"))
-        emptyExplanation.stringValue = location.isEmpty ? L10n.tr("Allow VibeZip to browse a folder and its contents.\nYour saved folders will appear in the sidebar.") :
+        emptyHeading.stringValue = location.isEmpty ? L10n.tr("Open an archive or choose a folder") : (query.isEmpty ? L10n.tr("Empty Folder") : L10n.tr("No Results"))
+        emptyExplanation.stringValue = location.isEmpty ? L10n.tr("Drop an archive here to open it.\nChoose a folder to browse its contents.") :
             (query.isEmpty ? L10n.tr("Drop files here or use Add to put something in it.") : L10n.tr("No items match “\(query)”. Try a different search."))
         chooseButton.isHidden = !location.isEmpty
     }
@@ -629,9 +629,13 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
 
     private func validateDrop(_ info: NSDraggingInfo, into destination: BrowserLocation) -> NSDragOperation {
         guard let owner = owner, owner.canAcceptCommands, !owner.hasActiveOperations,
-              !destination.isEmpty, destination.archive?.canModify != false else { return [] }
+              destination.archive?.canModify != false else { return [] }
         let pasteboard = info.draggingPasteboard
-        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) { return .copy }
+        if pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) {
+            // An empty pane opens one selected location; it has no copy/add destination.
+            guard !destination.isEmpty || pasteboard.pasteboardItems?.count == 1 else { return [] }
+            return .copy
+        }
         if destination.directory != nil, pasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) { return .copy }
         return []
     }
