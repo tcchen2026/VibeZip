@@ -30,6 +30,7 @@
 "About VibeZip" = "关于 VibeZip";
 "Access" = "访问权限";
 "Add Folder…" = "添加文件夹…";
+"Add %@ dropped items to “%@”?" = "将拖入的 %@ 个项目添加到“%@”？";
 "Add to Archive" = "添加到压缩文件";
 "Add to Archive…" = "添加到压缩文件…";
 "Add to archive" = "添加到压缩文件";
@@ -251,6 +252,8 @@
 "Open as Archive" = "作为压缩文件打开";
 "Open nested archive" = "打开嵌套压缩文件";
 "Open" = "打开";
+"Open or add the dropped item?" = "打开拖入的项目，还是添加到压缩包？";
+"Open “%@” in this pane, or add it to “%@”." = "在此面板中打开“%@”，或将其添加到“%@”。";
 "Opening" = "正在打开";
 "Operation cancelled." = "操作已取消。";
 "Operation could not be completed" = "无法完成操作";

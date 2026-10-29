@@ -628,12 +628,12 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
     }
 
     private func validateDrop(_ info: NSDraggingInfo, into destination: BrowserLocation) -> NSDragOperation {
-        guard let owner = owner, owner.canAcceptCommands, !owner.hasActiveOperations,
-              destination.archive?.canModify != false else { return [] }
+        guard let owner = owner, owner.canAcceptCommands, !owner.hasActiveOperations else { return [] }
         let pasteboard = info.draggingPasteboard
         if pasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) {
-            // An empty pane opens one selected location; it has no copy/add destination.
-            guard !destination.isEmpty || pasteboard.pasteboardItems?.count == 1 else { return [] }
+            // Empty and read-only archive panes can open one item, but cannot add files.
+            let opensOnly = destination.isEmpty || destination.archive?.canModify == false
+            guard !opensOnly || pasteboard.pasteboardItems?.count == 1 else { return [] }
             return .copy
         }
         if destination.directory != nil, pasteboard.canReadObject(forClasses: [NSFilePromiseReceiver.self], options: nil) { return .copy }

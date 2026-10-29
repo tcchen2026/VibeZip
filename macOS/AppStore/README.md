@@ -1,7 +1,7 @@
 # VibeZip App Store 提交资料
 
 本次提交采用免费定价，暂不在法国分发。本次修复后的安装包为版本 **2026.10.29**、
-构建 **4**，应用源码标识记录在包内的 `VibeZipVersion` 字段。这些资料用于填写 App Store Connect；
+构建 **5**，应用源码标识记录在包内的 `VibeZipVersion` 字段。这些资料用于填写 App Store Connect；
 保存仓库文档不会自动修改商店记录或发布应用。
 
 ## 基本信息
@@ -11,7 +11,7 @@
 | App 名称 | VibeZip |
 | 平台 | macOS |
 | 版本 | 2026.10.29 |
-| 构建版本 | 选择已完成处理的构建 4 |
+| 构建版本 | 选择已完成处理的构建 5 |
 | Bundle ID | org.vibezip.swift |
 | 主要类别 | 工具（Utilities），与安装包一致 |
 | 次要类别 | 可留空 |
@@ -109,4 +109,4 @@ Mac 支持 1280×800、1440×900、2560×1600 或 2880×1800 像素；建议统�
 - 确认免费价格和最终销售地区，排除法国；其他地区的账户或上架资格按 App Store Connect 的实际要求处理。
 - 若向其他欧盟国家分发，按真实经营情况填写 DSA 经营者身份，不能仅因免费就判断为非经营者。
   见 [Apple 欧盟 DSA 要求](https://developer.apple.com/help/app-store-connect/manage-compliance-information/manage-european-union-digital-services-act-trader-requirements/)。
-- 在 App Store Connect 中选择处理完成的构建 4，完成页面要求的项目后添加至审核并提交；上传安装包本身不会发布 App。
+- 在 App Store Connect 中选择处理完成的构建 5，完成页面要求的项目后添加至审核并提交；上传安装包本身不会发布 App。

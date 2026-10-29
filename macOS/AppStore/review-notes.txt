@@ -7,7 +7,7 @@ Suggested review flow
 1. Save the attached review-sample.zip and drop it onto the empty VibeZip window. It should open without a parent-folder access request. It contains demonstration text files and Samples/Nested.zip; no passwords or accounts are needed.
 2. Navigate to Samples, open Nested.zip inside the archive, then select Readme.txt and click Preview.
 3. Extract review-sample.zip into a local folder and authorize that folder in VibeZip. Select local text files and use Add to create a ZIP or 7z archive. The compression dialog also provides optional password encryption.
-4. Open the newly created ZIP. Drag another local file from Finder into the file list to add it, then use Test to check the archive. Existing names require update confirmation. Changes can also rename or delete entries in supported writable formats.
+4. Open the newly created ZIP. Drag another local file from Finder into the file list and choose Add to Archive, then use Test to check the archive. Every single-item drop into a writable archive offers Open, Add to Archive and Cancel, regardless of file type. Existing names require update confirmation. Changes can also rename or delete entries in supported writable formats.
 5. Enable 2 Panels to browse an archive and a filesystem folder side by side. Settings manages saved folder access and temporary storage, including Show Temporary Folder and Clean Temporary Files.
 
 Privacy and limitations

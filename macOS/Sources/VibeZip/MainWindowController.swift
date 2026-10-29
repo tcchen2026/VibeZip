@@ -562,9 +562,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         }, success: { [weak self] _ in self?.refreshFilePanes() })
     }
     func receiveDropped(_ urls: [URL], in pane: PaneController, into destination: BrowserLocation) -> Bool {
-        guard canAcceptCommands, !hasActiveOperations, !urls.isEmpty,
-              destination.archive?.canModify != false else { return false }
-        if destination.isEmpty {
+        guard canAcceptCommands, !hasActiveOperations, !urls.isEmpty else { return false }
+        defer { onIdle?() }
+        if destination.isEmpty || destination.archive?.canModify == false {
             guard urls.count == 1, let url = urls.first else { return false }
             activate(pane)
             // The drop grants access to this URL, not its parent folder.
@@ -572,11 +572,20 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             return true
         }
         activate(pane)
-        guard acceptUserSelectedURLs(urls) else { return false }
         if let archive = destination.archive {
-            addSources(urls, to: archive, prefix: destination.prefix, confirmAddition: false)
+            let target = destination.prefix.isEmpty ? archive.url.lastPathComponent : archive.url.lastPathComponent + "/" + destination.prefix
+            switch Dialogs.archiveDrop(urls, destination: target) {
+            case .open:
+                guard urls.count == 1, let url = urls.first else { return false }
+                openURL(url, in: pane, userSelected: true)
+            case .add:
+                guard acceptUserSelectedURLs(urls) else { return false }
+                addSources(urls, to: archive, prefix: destination.prefix, confirmAddition: false)
+            case .cancel: return false
+            }
             return true
         }
+        guard acceptUserSelectedURLs(urls) else { return false }
         if let directory = destination.directory, ensureFolderAccess(directory) {
             transferFiles(urls, to: directory, policy: .rename, move: false)
             return true

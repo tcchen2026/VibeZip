@@ -30,6 +30,7 @@
 "About VibeZip" = "About VibeZip";
 "Access" = "Access";
 "Add Folder…" = "Add Folder…";
+"Add %@ dropped items to “%@”?" = "Add %@ dropped items to “%@”?";
 "Add to Archive" = "Add to Archive";
 "Add to Archive…" = "Add to Archive…";
 "Add to archive" = "Add to archive";
@@ -251,6 +252,8 @@
 "Open as Archive" = "Open as Archive";
 "Open nested archive" = "Open nested archive";
 "Open" = "Open";
+"Open or add the dropped item?" = "Open or add the dropped item?";
+"Open “%@” in this pane, or add it to “%@”." = "Open “%@” in this pane, or add it to “%@”.";
 "Opening" = "Opening";
 "Operation cancelled." = "Operation cancelled.";
 "Operation could not be completed" = "Operation could not be completed";

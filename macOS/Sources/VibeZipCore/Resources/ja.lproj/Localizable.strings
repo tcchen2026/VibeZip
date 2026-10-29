@@ -30,6 +30,7 @@
 "About VibeZip" = "VibeZip について";
 "Access" = "アクセス";
 "Add Folder…" = "フォルダを追加…";
+"Add %@ dropped items to “%@”?" = "ドロップした %@ 個の項目を「%@」に追加しますか？";
 "Add to Archive" = "アーカイブに追加";
 "Add to Archive…" = "アーカイブに追加…";
 "Add to archive" = "アーカイブに追加";
@@ -251,6 +252,8 @@
 "Open as Archive" = "アーカイブとして開く";
 "Open nested archive" = "入れ子のアーカイブを開く";
 "Open" = "開く";
+"Open or add the dropped item?" = "ドロップした項目を開きますか、追加しますか？";
+"Open “%@” in this pane, or add it to “%@”." = "このペインで「%@」を開くか、「%@」に追加します。";
 "Opening" = "開いています";
 "Operation cancelled." = "操作をキャンセルしました。";
 "Operation could not be completed" = "操作を完了できませんでした";

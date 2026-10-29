@@ -30,6 +30,7 @@
 "About VibeZip" = "VibeZip에 관하여";
 "Access" = "접근 권한";
 "Add Folder…" = "폴더 추가…";
+"Add %@ dropped items to “%@”?" = "놓은 항목 %@개를 “%@”에 추가할까요?";
 "Add to Archive" = "압축 파일에 추가";
 "Add to Archive…" = "압축 파일에 추가…";
 "Add to archive" = "압축 파일에 추가";
@@ -251,6 +252,8 @@
 "Open as Archive" = "압축 파일로 열기";
 "Open nested archive" = "중첩 압축 파일 열기";
 "Open" = "열기";
+"Open or add the dropped item?" = "놓은 항목을 열까요, 압축 파일에 추가할까요?";
+"Open “%@” in this pane, or add it to “%@”." = "“%@” 항목을 이 패널에서 열거나 “%@”에 추가하세요.";
 "Opening" = "여는 중";
 "Operation cancelled." = "작업이 취소되었습니다.";
 "Operation could not be completed" = "작업을 완료할 수 없습니다";

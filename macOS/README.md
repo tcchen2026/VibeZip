@@ -77,9 +77,12 @@ supports text, hex, images and PDF. Long operations report progress and can be
 cancelled. Archive tests display their result in a dialog.
 
 Drag files or folders from Finder into an open ZIP or another writable archive
-to add them. Drop onto a folder to add them inside it, or onto empty space to use
-the current folder. This works in Icons, List and Details. New names are added
-directly; matching names or folders ask before updating existing contents.
+to choose **Open**, **Add to Archive**, or **Cancel** for a single item; multiple
+items ask before adding them all. This choice applies to every file type. Choosing
+Add uses the folder under the drop, or the current archive folder when dropping
+onto empty space. Matching names or folders ask before updating existing contents.
+A single drop onto a read-only archive opens the item directly. This works in
+Icons, List and Details.
 
 ZIP names with valid Unicode metadata retain it. Other names are checked for
 UTF-8 and automatically detected legacy code pages, including GBK, Big5 and

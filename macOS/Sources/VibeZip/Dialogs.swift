@@ -140,6 +140,26 @@ struct ExtractionRequest {
 }
 
 enum Dialogs {
+    enum ArchiveDropAction { case open, add, cancel }
+
+    static func archiveDrop(_ urls: [URL], destination: String) -> ArchiveDropAction {
+        guard urls.count == 1, let url = urls.first else {
+            return UIFormat.confirm(L10n.tr("Add to Archive"),
+                L10n.tr("Add \(urls.count) dropped items to “\(destination)”?"), action: L10n.tr("Add")) ? .add : .cancel
+        }
+        let alert = NSAlert(); alert.alertStyle = .informational
+        alert.messageText = L10n.tr("Open or add the dropped item?")
+        alert.informativeText = L10n.tr("Open “\(url.lastPathComponent)” in this pane, or add it to “\(destination)”.")
+        alert.addButton(withTitle: L10n.tr("Open")).keyEquivalent = "\r"
+        alert.addButton(withTitle: L10n.tr("Add to Archive"))
+        alert.addButton(withTitle: L10n.tr("Cancel")).keyEquivalent = "\u{1b}"
+        switch alert.runModal() {
+        case .alertFirstButtonReturn: return .open
+        case .alertSecondButtonReturn: return .add
+        default: return .cancel
+        }
+    }
+
     static func extraction(archive: ArchiveContext, prefix: String, suggested: URL) -> ExtractionRequest? {
         let form = FormView(); let path = PathInput(path: suggested.path, saving: false)
         let layout = NSPopUpButton(); layout.addItems(withTitles: [L10n.tr("Full paths"), L10n.tr("Relative to current folder"), L10n.tr("No paths (files only)")])
