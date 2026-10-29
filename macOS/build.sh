@@ -95,6 +95,16 @@ VIBEZIP_XCODE_NUMBER="$(printf '%s\n' "$VIBEZIP_XCODE_INFO" | awk '/^Xcode / { s
 cp "$VIBEZIP_ROOT/Resources/PrivacyInfo.xcprivacy" "$VIBEZIP_ROOT/Resources/Privacy.txt" "$VIBEZIP_APP/Contents/Resources/"
 cp "$VIBEZIP_ROOT/README.md" "$VIBEZIP_ROOT/Resources/GitHub.svg" "$VIBEZIP_APP/Contents/Resources/"
 cp -R "$VIBEZIP_BIN/VibeZip_VibeZipCore.bundle" "$VIBEZIP_APP/Contents/Resources/"
+# SwiftPM's resource-only bundle has no identifier/version metadata of its own.
+VIBEZIP_BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$VIBEZIP_APP/Contents/Info.plist")"
+VIBEZIP_RESOURCE_INFO="$VIBEZIP_APP/Contents/Resources/VibeZip_VibeZipCore.bundle/Info.plist"
+/usr/libexec/PlistBuddy \
+    -c "Add :CFBundleIdentifier string $VIBEZIP_BUNDLE_ID.resources" \
+    -c 'Add :CFBundleName string VibeZipCoreResources' \
+    -c 'Add :CFBundleInfoDictionaryVersion string 6.0' \
+    -c 'Add :CFBundlePackageType string BNDL' \
+    -c "Add :CFBundleShortVersionString string $VIBEZIP_SHORT_VERSION" \
+    -c "Add :CFBundleVersion string $VIBEZIP_BUILD_VERSION" "$VIBEZIP_RESOURCE_INFO"
 cp "$VIBEZIP_ROOT/LICENSE" "$VIBEZIP_APP/Contents/Resources/Licenses/VibeZip-LGPL.txt"
 cp "$VIBEZIP_ROOT/Resources/Licenses/"*.txt "$VIBEZIP_APP/Contents/Resources/Licenses/"
 cp "$VIBEZIP_ROOT/Resources/THIRD_PARTY_NOTICES.txt" "$VIBEZIP_APP/Contents/Resources/Licenses/"

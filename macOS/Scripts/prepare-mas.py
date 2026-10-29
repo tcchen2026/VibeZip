@@ -9,6 +9,7 @@ from pathlib import Path
 import plistlib
 import re
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -26,6 +27,28 @@ def read_plist(path):
 def write_plist(path, value):
     with path.open("wb") as stream:
         plistlib.dump(value, stream, sort_keys=False)
+
+
+def verify_payload(app):
+    require(app.is_dir(), "The packaged application is missing.")
+    for path in [app, *app.rglob("*")]:
+        if path.is_symlink():
+            continue
+        mode = stat.S_IMODE(path.stat().st_mode)
+        required = 0o555 if path.is_dir() else 0o444
+        require(mode & required == required,
+                f"App contents must be readable by every user: {path.relative_to(app.parent)} ({mode:04o}).")
+    for bundle in app.rglob("*.bundle"):
+        info_path = bundle / "Contents/Info.plist"
+        if not info_path.is_file():
+            info_path = bundle / "Info.plist"
+        require(info_path.is_file(), f"Missing resource bundle Info.plist: {bundle.name}")
+        info = read_plist(info_path)
+        require(re.fullmatch(r"[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+", info.get("CFBundleIdentifier", "")),
+                f"Missing or invalid resource bundle identifier: {bundle.name}")
+        require(info.get("CFBundlePackageType") == "BNDL", f"Missing resource bundle type: {bundle.name}")
+        require(info.get("CFBundleShortVersionString") and info.get("CFBundleVersion"),
+                f"Missing resource bundle version: {bundle.name}")
 
 
 def identities(codesigning=False):
@@ -93,15 +116,25 @@ def prepare_signing(app, output, bundle_id, entitlements):
     entitlements["com.apple.developer.team-identifier"] = team
     if "beta-reports-active" in allowed:
         entitlements["beta-reports-active"] = allowed["beta-reports-active"]
-    shutil.copyfile(profile_path, app / "Contents/embedded.provisionprofile")
+    embedded_profile = app / "Contents/embedded.provisionprofile"
+    shutil.copyfile(profile_path, embedded_profile)
+    # This public signing authorization is installed as root along with the app.
+    # Every user must be able to read it, regardless of the private staging umask.
+    embedded_profile.chmod(0o644)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--output", type=Path)
     parser.add_argument("--unsigned", action="store_true")
+    parser.add_argument("--verify-only", action="store_true")
     args = parser.parse_args()
+    if args.verify_only:
+        verify_payload(args.app)
+        print("App payload permissions and resource bundle metadata verified.")
+        return
+    require(args.output is not None and args.output.is_dir(), "Provide an existing --output staging directory.")
     app, output = args.app, args.output
     info_path = app / "Contents/Info.plist"
     info = read_plist(info_path)
@@ -133,6 +166,12 @@ def main():
     for language in info.get("CFBundleLocalizations", []):
         require((resources / "VibeZip_VibeZipCore.bundle" / f"{language.lower()}.lproj/Localizable.strings").is_file(),
                 f"Missing localization: {language}")
+    resource_info_path = resources / "VibeZip_VibeZipCore.bundle/Info.plist"
+    resource_info = read_plist(resource_info_path)
+    require(resource_info.get("CFBundleIdentifier") == bundle_id + ".resources",
+            "Resource bundle metadata is missing; rebuild with the current build.sh before packaging.")
+    resource_info["CFBundleShortVersionString"] = info["CFBundleShortVersionString"]
+    resource_info["CFBundleVersion"] = build_number
     entitlements = read_plist(Path(__file__).resolve().parent.parent / "Resources/VibeZip.entitlements")
     require(entitlements.get("com.apple.security.app-sandbox") is True
             and entitlements.get("com.apple.security.files.user-selected.read-write") is True
@@ -148,8 +187,10 @@ def main():
     else:
         prepare_signing(app, output, bundle_id, entitlements)
     write_plist(info_path, info)
+    write_plist(resource_info_path, resource_info)
     write_plist(output / "mas.entitlements", entitlements)
     write_plist(output / "requirements.plist", {"os": ["26.0"], "arch": ["arm64", "x86_64"]})
+    verify_payload(app)
     print(f"{bundle_id}: version {info['CFBundleShortVersionString']}, build {build_number}")
 
 

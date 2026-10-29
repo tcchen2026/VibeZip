@@ -78,7 +78,13 @@ VIBEZIP_PACKAGE="$VIBEZIP_STAGE/$VIBEZIP_NAME"
 # Apple's --component mode creates a single-app package without install scripts.
 productbuild "${VIBEZIP_PACKAGE_FLAGS[@]}" --component "$VIBEZIP_STAGED_APP" /Applications "$VIBEZIP_PACKAGE"
 if [ "$VIBEZIP_UNSIGNED" -eq 0 ]; then pkgutil --check-signature "$VIBEZIP_PACKAGE"; fi
-pkgutil --expand "$VIBEZIP_PACKAGE" "$VIBEZIP_STAGE/expanded"
+pkgutil --expand-full "$VIBEZIP_PACKAGE" "$VIBEZIP_STAGE/expanded"
+VIBEZIP_PACKAGED_APPS=("$VIBEZIP_STAGE"/expanded/*.pkg/Payload/VibeZip.app)
+[ "${#VIBEZIP_PACKAGED_APPS[@]}" -eq 1 ] && [ -d "${VIBEZIP_PACKAGED_APPS[0]}" ] || {
+    echo 'The package must contain exactly one VibeZip.app.' >&2; exit 1;
+}
+xcrun python3 Scripts/prepare-mas.py --app "${VIBEZIP_PACKAGED_APPS[0]}" --verify-only
+codesign --verify --deep --strict --verbose=2 "${VIBEZIP_PACKAGED_APPS[0]}"
 (cd "$VIBEZIP_STAGE" && shasum -a 256 "$VIBEZIP_NAME" > "$VIBEZIP_NAME.sha256")
 chmod 644 "$VIBEZIP_PACKAGE" "$VIBEZIP_PACKAGE.sha256"
 mv "$VIBEZIP_PACKAGE" "$VIBEZIP_ROOT/dist/$VIBEZIP_NAME"

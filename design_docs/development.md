@@ -39,6 +39,8 @@ SwiftPM processes the core target's `Resources/*.lproj` folders into
 `VibeZip_VibeZipCore.bundle`. The app build copies that bundle into
 `Contents/Resources`; runtime lookup uses this copy before SwiftPM's development
 bundle, so translations and localized Help/Privacy work away from the checkout.
+Packaging supplies the resource bundle's identifier, bundle type and versions
+because SwiftPM's generated plist contains only its development language.
 `Info.plist` declares the same supported languages. Add a key to all four
 `Localizable.strings` tables and preserve its interpolation arguments.
 
@@ -129,8 +131,9 @@ requires the configured Developer ID and notarization credentials. The regular
 app build remains ad-hoc signed. `Scripts/package-mas.sh` and the separate manual
 **macOS App Store** workflow prepare signed store packages with a matching
 provisioning profile. See [Mac App Store packaging](app-store.md). Real store
-signing and upload acceptance still need verification with publisher credentials;
-store metadata and submission remain release work. Neither workflow uploads to
+signing has been verified locally; upload acceptance and TestFlight installation
+still need verification with publisher credentials.
+Store metadata and submission remain release work. Neither workflow uploads to
 App Store Connect.
 
 Before a release, validate the exact distributed build's folder authorization,

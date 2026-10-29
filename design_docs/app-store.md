@@ -78,11 +78,18 @@ the profile's application/team identifiers and, when present, its beta reporting
 entitlement to the app's existing sandbox entitlements. Network access stays
 disabled. The library is signed first without process entitlements, then the
 app is signed with hardened runtime and DER entitlements.
+The embedded profile has mode `0644`, so users can read it after the installer
+assigns ownership to root. Private staging remains mode-restricted. The SwiftPM
+resource bundle receives its own bundle identifier (`<app-id>.resources`), bundle
+type and versions, with its store build number matching the app.
 
 Packaging checks bundle metadata, both architectures, required resources,
 localizations, privacy-manifest syntax and code signatures. It signs the package
 with the installer identity, checks its signature, expands its structure, and
-only then promotes the package and checksum into `dist/`. This does not replace
+verifies that the extracted app still has valid code signatures, that its files
+are readable by every user, and that resource bundles carry identifiers and
+versions. Only then does it promote the package and checksum into `dist/`. These
+checks cover the packaging errors reported as 90255 and 90276. This does not replace
 Apple's upload validation or checks of the running, store-signed app. Signing
 timestamps may require network access on the build machine; the app itself still
 has no network entitlement. Store packages do not use the Developer ID
@@ -130,9 +137,10 @@ Review the bundled source and notices against the final distributed binary.
 Validate the exact TestFlight/store build's permission flows, archive changes,
 cancellation and temporary cleanup before release.
 
-The unsigned universal packaging path has local verification. Real certificate
-signing, upload acceptance and TestFlight installation require the publisher's
-credentials and have not yet been verified for this project.
+Universal packaging and local application/installer signing have been verified
+with store distribution certificates. App Store Connect acceptance and TestFlight
+installation still require verification; local signature checks alone do not
+establish upload acceptance.
 
 Primary references: Apple's
 [distribution signing](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/),
