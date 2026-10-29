@@ -143,6 +143,12 @@ or Apple's supported command-line tools; neither is invoked by packaging. See
 [Upload builds](https://developer.apple.com/help/app-store-connect/manage-builds/upload-builds/).
 Configure App Store Connect metadata, screenshots, support/privacy URLs, privacy
 answers, and encryption declarations for the shipped archive encryption features.
+The [submission materials](../macOS/AppStore/README.md) include store text in all
+four app languages, review notes and a small review archive. Public
+[support](../SUPPORT.md) and [privacy](../PRIVACY.md) pages live at the repository
+root. Publish these files to the public repository before using their GitHub URLs
+in App Store Connect. The current release plan is free distribution excluding
+France; screenshots and account-holder details still need to be supplied.
 Review the bundled source and notices against the final distributed binary.
 Validate the exact TestFlight/store build's permission flows, archive changes,
 cancellation and temporary cleanup before release.

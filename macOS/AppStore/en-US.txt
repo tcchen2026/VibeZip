@@ -1,0 +1,37 @@
+Name
+VibeZip
+
+Subtitle
+Browse, extract and edit files
+
+Promotional Text
+Browse archives, open nested ZIPs and add files by dragging from Finder. Manage files in one or two panes, with local previews and no account required.
+
+Keywords
+zip,rar,archive,unzip,extract,compress,files,folders,preview,offline,password
+
+Description
+VibeZip is a native archive manager for macOS. Browse an archive before extracting it, open archives inside archives, and work with files in one or two panes.
+
+Browse and extract
+Open ZIP, 7z, RAR, TAR and other supported formats. Choose Icons, List or Details view, filter filenames and navigate folders using the address bar.
+
+Create and edit
+Create ZIP and 7z archives, with optional password encryption. Drag files or folders from Finder into an open writable archive to add them. Rename or delete entries in supported writable formats. Archive updates are staged and verified before replacing the original.
+
+Preview locally
+Preview text, images, hexadecimal data and the first page of a PDF inside the app. Files and passwords are processed on your Mac, without an account, advertising or analytics.
+
+Stay in control
+Choose the folders the app may access. View temporary storage usage and clean unused temporary files in Settings. Optional recovery copies are off by default and use temporary storage when enabled.
+
+Requires macOS 26 or later. Supports English, Simplified Chinese, Japanese and Korean. RAR and multivolume archives are read only. Editing an archive may require permission to access its containing folder. Previews have file-size limits.
+
+Support URL
+https://github.com/tcchen2026/VibeZip/blob/main/SUPPORT.md
+
+Privacy Policy URL
+https://github.com/tcchen2026/VibeZip/blob/main/PRIVACY.md
+
+Marketing URL
+https://github.com/tcchen2026/VibeZip

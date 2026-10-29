@@ -3,6 +3,8 @@
 A 7-Zip fork with a native macOS archive manager. Based on 7-Zip 26.03.
 
 - [macOS app and build instructions](macOS/README.md)
+- [Support and contact](SUPPORT.md)
+- [Privacy policy](PRIVACY.md)
 - [Design documents](design_docs/README.md)
 - [Manual DMG builds and signing](design_docs/distribution.md)
 - [Complete supplied UI reference](design_reference/README.md)
