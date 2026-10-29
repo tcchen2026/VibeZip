@@ -228,6 +228,7 @@
 "Name" = "名前";
 "Names cannot be empty or contain /, \\, : or control characters." = "名前を空にしたり、/、\\、:、制御文字を含めたりすることはできません。";
 "New Folder" = "新規フォルダ";
+"New Window" = "新規ウインドウ";
 "New Folder…" = "新規フォルダ…";
 "No Results" = "結果なし";
 "No archive changes were produced." = "アーカイブへの変更は生成されませんでした。";

@@ -228,6 +228,7 @@
 "Name" = "이름";
 "Names cannot be empty or contain /, \\, : or control characters." = "이름은 비워 둘 수 없으며 /, \\, : 또는 제어 문자를 포함할 수 없습니다.";
 "New Folder" = "새 폴더";
+"New Window" = "새 윈도우";
 "New Folder…" = "새 폴더…";
 "No Results" = "결과 없음";
 "No archive changes were produced." = "압축 파일에 변경사항이 생성되지 않았습니다.";

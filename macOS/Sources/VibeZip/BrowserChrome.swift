@@ -22,7 +22,7 @@ final class BrowserPresentation: ObservableObject {
     @Published var recent: [Place] = []
     @Published var selectedPlace = ""
     @Published var title = L10n.tr("No selection")
-    @Published var subtitle = L10n.tr("Choose a folder to get started")
+    @Published var subtitle = L10n.tr("Open an archive or choose a folder")
     @Published var symbol = "folder"
     @Published var details: [Detail] = []
     @Published var archiveDetails: [Detail] = []
@@ -36,11 +36,16 @@ final class BrowserPresentation: ObservableObject {
                   symbol: "folder", location: .directory($0.url), available: $0.isAvailable)
         }
         var seen = Set<String>()
-        archives = (panes.map(\.location) + panes.flatMap(\.recentLocations)).compactMap { location in
+        let openArchives: [Place] = (panes.map(\.location) + panes.flatMap(\.recentLocations)).compactMap { location in
             guard let archive = location.archive, seen.insert(archive.id.uuidString).inserted else { return nil }
             return Place(id: archive.id.uuidString, name: archive.url.lastPathComponent, symbol: "archivebox",
                          location: .archive(archive, ""))
         }
+        let previousIDs = Set(archives.map(\.id))
+        let available = Dictionary(uniqueKeysWithValues: openArchives.map { ($0.id, $0) })
+        // New sessions go first; selecting an existing archive never changes its position.
+        archives = openArchives.filter { !previousIDs.contains($0.id) }
+            + archives.compactMap { available[$0.id] }
         recent = pane.recentLocations.compactMap { location in
             guard let url = location.directory, !folders.contains(where: { $0.id == url.path }) else { return nil }
             return Place(id: url.path, name: url.lastPathComponent, symbol: "folder", location: location)
@@ -125,6 +130,9 @@ final class BrowserWindowLayout: NSSplitViewController {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     func refresh() {
         guard let owner = owner else { return }
+        // Archive listings are updated by the shared worker. Keep the last UI snapshot
+        // while another window operates on them, then refresh all windows when idle.
+        if owner.isBusy { presentation.busy = true; return }
         presentation.update(from: owner.activePane, panes: owner.panes, busy: owner.isBusy)
     }
     func togglePlaces() {

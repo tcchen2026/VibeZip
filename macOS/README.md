@@ -61,6 +61,12 @@ Toggle **2 Panels** in the toolbar for two independent browsers.
 Tab changes the active pane; commands, filter and Info follow it. In two-pane
 mode, Copy/Move suggests the other pane's filesystem folder.
 
+Use **File → New Window** (Command-N) for another browser window. Windows share
+archive sessions and file permissions, with independent navigation and selection.
+Open Archives stays ordered by opening time, newest first; selecting one does not
+move it. Closing the last window keeps VibeZip running. Click its Dock icon or
+choose New Window to return, and use Quit (Command-Q) to exit the app.
+
 The toolbar's view switcher selects Icons, List or Details while retaining the
 same selection. Command-1, Command-2 and Command-3 select these views directly.
 

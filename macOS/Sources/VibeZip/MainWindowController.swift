@@ -3,7 +3,8 @@ import AppKit
 import VibeZipCore
 
 final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolbarItemValidation, NSWindowDelegate, NSMenuItemValidation {
-    let service: ArchiveService
+    let workspace: BrowserWorkspace
+    var service: ArchiveService { workspace.service }
     let directoryAccess = DirectoryAccessStore.shared
     let workQueue: OperationQueue = {
         let queue = OperationQueue(); queue.name = "VibeZip.operations"; queue.maxConcurrentOperationCount = 1
@@ -15,30 +16,33 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     private var operationPane: PaneController?
     private(set) var usesTwoPanes = false
     private(set) var browserLayout: BrowserWindowLayout?
-    private(set) var isBusy = false { didSet { window?.toolbar?.validateVisibleItems(); browserLayout?.refresh() } }
+    var isBusy: Bool { workspace.isBusy }
     private var viewPicker: NSSegmentedControl?
     private var searchItem: NSSearchToolbarItem?
     var onIdle: (() -> Void)?
+    var onBecomeMain: (() -> Void)?
+    var onClose: (() -> Void)?
+    var canManageSharedAccess: (() -> Bool)?
     private var currentToken: CancellationToken?
     private var settingsCleanupToken: CancellationToken?
     private var progressWindow: OperationProgressWindow?
     private var lastLog = L10n.tr("No operations yet.")
     private var auxiliaryWindows: [NSWindowController] = []
-    private var temporaryFiles: [ScratchDirectory] = []
     var activePane: PaneController { usesTwoPanes ? (focusedPane ?? left) : left }
     var panes: [PaneController] { [left, right] }
     var keepBackups: Bool { UserDefaults.standard.bool(forKey: "temporaryArchiveBackupsEnabled") }
-    var hasActiveOperations: Bool { isBusy || workQueue.operationCount > 0 || settingsCleanupToken != nil }
+    var hasActiveOperations: Bool { workspace.operationOwner === self || workQueue.operationCount > 0 || settingsCleanupToken != nil }
     var canAcceptCommands: Bool { !isBusy && window?.attachedSheet == nil && NSApp.modalWindow == nil }
 
-    init(service: ArchiveService) {
-        self.service = service
+    init(workspace: BrowserWorkspace, autosavesFrame: Bool = true) {
+        self.workspace = workspace
         left = PaneController(directory: directoryAccess.restoreLastDirectory())
         right = PaneController(directory: nil)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1180, height: 740),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "VibeZip"; window.minSize = NSSize(width: 850, height: 520)
-        window.isReleasedWhenClosed = false; window.setFrameAutosaveName("VibeZip.MainWindow.Sevenfold")
+        window.isReleasedWhenClosed = false
+        if autosavesFrame { window.setFrameAutosaveName("VibeZip.MainWindow.Sevenfold") }
         super.init(window: window)
         window.delegate = self
         left.owner = self; right.owner = self
@@ -69,7 +73,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     func updateTitle() {
         let name = activePane.location.archive?.url.lastPathComponent ?? activePane.suggestedDirectory?.lastPathComponent
         window?.title = name.map { "VibeZip - " + $0 } ?? "VibeZip"
-        if let directory = activePane.location.directory { directoryAccess.remember(directory) }
+        if NSApp.mainWindow === window, let directory = activePane.location.directory { directoryAccess.remember(directory) }
         window?.toolbar?.validateVisibleItems()
         browserLayout?.refresh()
     }
@@ -77,11 +81,20 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         if hasActiveOperations { NSSound.beep(); return false }
         return true
     }
-    @objc private func appActivated() {
+    func windowDidBecomeMain(_ notification: Notification) {
+        onBecomeMain?(); refreshSharedState()
+    }
+    func windowWillClose(_ notification: Notification) { onClose?() }
+    func updateBusyState() {
+        window?.toolbar?.validateVisibleItems(); browserLayout?.refresh()
+    }
+    @objc private func appActivated() { refreshSharedState() }
+    func refreshSharedState() {
         guard canAcceptCommands, !hasActiveOperations else { return }
         directoryAccess.refreshUnavailable(); panes.forEach { $0.discardRevokedLocations() }
     }
     func applyPreferences() {
+        guard !isBusy else { return }
         let defaults = UserDefaults.standard
         let configuredLimit = max(1, min(100_000, defaults.integer(forKey: "extractionLimitGiB")))
         service.extractionLimit = UInt64(configuredLimit) * 1024 * 1024 * 1024
@@ -89,8 +102,8 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     func perform<T>(_ title: String, showCompletion: Bool = true, work: @escaping (CancellationToken, @escaping (String) -> Void) throws -> T,
                     success: @escaping (T) -> Void = { _ in }, failure: ((Error) -> Void)? = nil) {
-        guard canAcceptCommands, window != nil else { return }
-        isBusy = true; let token = CancellationToken(); currentToken = token
+        guard canAcceptCommands, window != nil, workspace.beginOperation(self) else { return }
+        let token = CancellationToken(); currentToken = token
         let pane = activePane; operationPane = pane
         pane.status.begin(title, token: token)
         let startedAt = ProcessInfo.processInfo.systemUptime
@@ -119,7 +132,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
                 guard let self = self else { return }
                 output.flush(); self.lastLog = title + "\n" + output.log
                 self.progressWindow?.close(); self.progressWindow = nil
-                self.isBusy = false; self.currentToken = nil; pane.status.finish()
+                self.workspace.endOperation(self); self.currentToken = nil; pane.status.finish()
                 switch result {
                 case .success(let value):
                     self.lastLog += L10n.tr("\nCompleted.")
@@ -603,7 +616,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             try service.extract(archive.url, paths: rows.map(\.path), indices: indices, to: scratch.url, layout: .relativeTo(prefix),
                 password: archive.password, token: token, output: output)
             return (scratch, rows.map { scratch.url.appendingPathComponent($0.name) })
-        }, success: { [weak self] scratch, urls in self?.temporaryFiles.append(scratch); completion(urls) },
+        }, success: { [weak self] scratch, urls in self?.workspace.temporaryFiles.append(scratch); completion(urls) },
             failure: archiveFailure(archive, retry: { [weak self, weak pane] in
                 guard let pane = pane else { return }; self?.materializeSelection(pane, completion: completion)
             }))
@@ -694,7 +707,7 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
         editPreferences(folderAccess: true)
     }
     private func editPreferences(folderAccess: Bool) {
-        guard canAcceptCommands, !hasActiveOperations else { return }
+        guard canAcceptCommands, !hasActiveOperations, canManageSharedAccess?() != false else { return }
         defer { onIdle?() }
         let changed = Dialogs.preferences(folderAccess: folderAccess) { [weak self] token in self?.settingsCleanupToken = token }
         panes.forEach { $0.discardRevokedLocations() }
@@ -738,10 +751,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
             success: { [weak self] _ in self?.refreshFilePanes() })
     }
 
-    func cleanupTemporaryFiles() {
-        service.cleanupTemporaryFiles()
-        for scratch in temporaryFiles { try? FileManager.default.removeItem(at: scratch.url) }
-        directoryAccess.close()
+    func closeAuxiliaryWindows() {
+        for controller in auxiliaryWindows { controller.close() }
+        auxiliaryWindows.removeAll()
     }
     @objc func showHelp(_ sender: Any?) {
         let url = L10n.resourceURL("Help", extension: "txt")
@@ -858,7 +870,9 @@ final class MainWindowController: NSWindowController, NSToolbarDelegate, NSToolb
     }
     private func isActionEnabled(_ action: Selector?) -> Bool {
         if [#selector(togglePlaces), #selector(properties), #selector(changeViewStyle), #selector(toggleTwoPanels)].contains(action) { return true }
-        if [#selector(showPreferences), #selector(showFolderAccess)].contains(action) { return !hasActiveOperations }
+        if [#selector(showPreferences), #selector(showFolderAccess)].contains(action) {
+            return !hasActiveOperations && canManageSharedAccess?() != false
+        }
         if activePane.location.isEmpty {
             return [#selector(chooseOpen), #selector(chooseFolder), #selector(focusAddress), #selector(showHelp), #selector(showPrivacyPolicy),
                     #selector(showLastLog), #selector(engineInformation), #selector(forgetPasswords), #selector(toggleHidden)].contains(action)

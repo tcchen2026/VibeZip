@@ -20,6 +20,8 @@ The default arrangement has these working areas:
 1. A collapsible sidebar: Favorites are actual saved folder grants, followed by
    open archives and recent folders from the current session. Add Folder uses
    the existing system permission picker. Unavailable grants remain visible.
+   Open Archives is ordered by opening time, newest first. Selecting an existing
+   archive or switching panes preserves its position; new sessions appear at the top.
 2. A native toolbar: Sidebar, Back and Forward at the left; Add, Extract and Test
    grouped separately from Copy, Move, Delete, Preview and Info.
 3. A rounded breadcrumb location row. Up and
@@ -30,6 +32,16 @@ The default arrangement has these working areas:
    metadata. Command-I toggles it without opening a separate window.
 
 Sidebar, inspector and two-pane mode are saved locally.
+**File → New Window** (Command-N) creates another browser window in the same app.
+Each window has its own panes, navigation history, selection, sidebar and inspector;
+menu commands target the frontmost browser window. Archive sessions, file grants,
+passwords and temporary resources are shared by the app. Archive operations run
+one at a time, and all windows refresh from the shared sessions when work finishes.
+Closing a window leaves the app and its file grants active, including when the
+last browser window closes. The Dock icon, New Window, or opening a file from
+Finder can bring back a browser window. Only Quit ends the app session and runs
+app-wide cleanup. A window with active work must finish or cancel it before closing.
+
 The toolbar's **2 Panels** control toggles two panes; Tab changes the active pane. Each
 pane keeps its own path, history, filter, view style and selection. Both panes
 refresh after archive mutations, and each permission check uses the same shared

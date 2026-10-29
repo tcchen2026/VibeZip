@@ -52,9 +52,19 @@ These checks do not provide a lock against other processes or a content hash.
 
 ## Scheduling and ownership
 
+[AppDelegate.swift](../macOS/Sources/VibeZip/AppDelegate.swift) retains the browser
+windows and routes app-level commands to the active one.
+[BrowserWorkspace.swift](../macOS/Sources/VibeZip/BrowserWorkspace.swift) owns one
+shared archive service, clipboard scratch files and the active-operation owner.
+Window navigation and selection remain independent. Closing a browser releases
+its UI, without closing the shared archive service or security-scoped resources.
+Closing the last window keeps the app running; app-wide cleanup occurs on Quit.
+
 [MainWindowController.swift](../macOS/Sources/VibeZip/MainWindowController.swift)
 runs substantial operations on a serial `OperationQueue`; AppKit updates return
-to the main queue. `ArchiveService` uses a recursive lock, and the native library
+to the main queue. The workspace admits one browser operation at a time across
+windows. Other windows keep their metadata snapshot while work is active and
+refresh from shared sessions afterward. `ArchiveService` uses a recursive lock, and the native library
 serializes access to its active operation and sessions. These boundaries are
 important even though a codec may use worker threads internally.
 

@@ -228,6 +228,7 @@
 "Name" = "名称";
 "Names cannot be empty or contain /, \\, : or control characters." = "名称不能为空，也不能包含 /、\\、: 或控制字符。";
 "New Folder" = "新建文件夹";
+"New Window" = "新建窗口";
 "New Folder…" = "新建文件夹…";
 "No Results" = "无结果";
 "No archive changes were produced." = "未产生任何压缩文件更改。";

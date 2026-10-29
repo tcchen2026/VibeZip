@@ -275,6 +275,7 @@ final class PaneController: NSViewController, NSTableViewDataSource, NSTableView
         refresh(); return true
     }
     func refresh() {
+        guard owner?.isBusy != true else { return }
         locationBar.show(path: location.display, components: location.breadcrumbs)
         updateEmptyState(loading: !location.isEmpty)
         upButton.isEnabled = canGoUp && owner?.isBusy != true

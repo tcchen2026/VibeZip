@@ -9,6 +9,7 @@ Suggested review flow
 3. Extract review-sample.zip into a local folder and authorize that folder in VibeZip. Select local text files and use Add to create a ZIP or 7z archive. The compression dialog also provides optional password encryption.
 4. Open the newly created ZIP. Drag another local file from Finder into the file list and choose Add to Archive, then use Test to check the archive. Every single-item drop into a writable archive offers Open, Add to Archive and Cancel, regardless of file type. Existing names require update confirmation. Changes can also rename or delete entries in supported writable formats.
 5. Enable 2 Panels to browse an archive and a filesystem folder side by side. Settings manages saved folder access and temporary storage, including Show Temporary Folder and Clean Temporary Files.
+6. Choose File > New Window to open another browser window. Windows share archive sessions and folder access. Closing all windows leaves the app running; click the Dock icon to open a window again, or choose Quit VibeZip to exit.
 
 Privacy and limitations
 Processing stays on the Mac. The app has no analytics or advertising, and its sandbox disables incoming and outgoing network connections. Archive passwords stay in memory. Preview and nested archive operations can create temporary copies, including decrypted data. Cleanup preserves files that are still in use; optional recovery copies are off by default and are not permanent backups.

@@ -228,6 +228,7 @@
 "Name" = "Name";
 "Names cannot be empty or contain /, \\, : or control characters." = "Names cannot be empty or contain /, \\, : or control characters.";
 "New Folder" = "New Folder";
+"New Window" = "New Window";
 "New Folder…" = "New Folder…";
 "No Results" = "No Results";
 "No archive changes were produced." = "No archive changes were produced.";

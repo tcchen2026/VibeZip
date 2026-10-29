@@ -16,6 +16,8 @@ safe to parse or grant access to every file displayed as a path.
 [DirectoryAccessStore.swift](../macOS/Sources/VibeZipCore/DirectoryAccessStore.swift)
 owns security-scoped resources on the main thread. Folder scopes remain active
 for the process lifetime or until removed. Workers use that process access.
+All browser windows share these grants. Closing a window, even the last one,
+does not release or revoke them; app-wide scopes close when the app quits.
 
 | Situation | Behavior |
 | --- | --- |
