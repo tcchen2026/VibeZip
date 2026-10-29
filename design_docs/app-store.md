@@ -83,14 +83,24 @@ assigns ownership to root. Private staging remains mode-restricted. The SwiftPM
 resource bundle receives its own bundle identifier (`<app-id>.resources`), bundle
 type and versions, with its store build number matching the app.
 
+After embedding the profile and writing bundle metadata, preparation clears all
+extended attributes recursively from the staged app before signing. This removes
+download quarantine, Finder information and other inherited metadata; symlinks
+are handled without following their targets. Source files and the original
+downloaded profile are unchanged. See Apple's
+[extended attribute cleanup guidance](https://developer.apple.com/library/archive/qa/qa1940/_index.html).
+
 Packaging checks bundle metadata, both architectures, required resources,
 localizations, privacy-manifest syntax and code signatures. It signs the package
 with the installer identity, checks its signature, expands its structure, and
-verifies that the extracted app still has valid code signatures, that its files
-are readable by every user, and that resource bundles carry identifiers and
-versions. Only then does it promote the package and checksum into `dist/`. These
-checks cover the packaging errors reported as 90255 and 90276. This does not replace
-Apple's upload validation or checks of the running, store-signed app. Signing
+verifies the extracted app's code signatures, absence of extended attributes,
+read permissions for every user, and resource bundle identifiers and versions.
+Verification never clears attributes from the
+extracted payload: unexpected metadata fails the build. The installer file's own
+attributes are also cleared and checked. Only then does it promote the package
+and checksum into `dist/`. These checks cover the packaging errors reported as
+90255, 90276 and 91109. This does not replace Apple's upload validation or checks
+of the running, store-signed app. Signing
 timestamps may require network access on the build machine; the app itself still
 has no network entitlement. Store packages do not use the Developer ID
 notarization/stapling route.

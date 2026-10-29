@@ -77,6 +77,11 @@ fi
 VIBEZIP_PACKAGE="$VIBEZIP_STAGE/$VIBEZIP_NAME"
 # Apple's --component mode creates a single-app package without install scripts.
 productbuild "${VIBEZIP_PACKAGE_FLAGS[@]}" --component "$VIBEZIP_STAGED_APP" /Applications "$VIBEZIP_PACKAGE"
+/usr/bin/xattr -c "$VIBEZIP_PACKAGE"
+VIBEZIP_PACKAGE_ATTRIBUTES="$(/usr/bin/xattr "$VIBEZIP_PACKAGE")"
+[ -z "$VIBEZIP_PACKAGE_ATTRIBUTES" ] || {
+    echo 'The installer package must not contain extended attributes.' >&2; exit 1;
+}
 if [ "$VIBEZIP_UNSIGNED" -eq 0 ]; then pkgutil --check-signature "$VIBEZIP_PACKAGE"; fi
 pkgutil --expand-full "$VIBEZIP_PACKAGE" "$VIBEZIP_STAGE/expanded"
 VIBEZIP_PACKAGED_APPS=("$VIBEZIP_STAGE"/expanded/*.pkg/Payload/VibeZip.app)

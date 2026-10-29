@@ -31,6 +31,9 @@ def write_plist(path, value):
 
 def verify_payload(app):
     require(app.is_dir(), "The packaged application is missing.")
+    attributes = subprocess.check_output(["/usr/bin/xattr", "-rs", str(app)], text=True)
+    require(not attributes.strip(),
+            "App contents must not contain extended attributes:\n" + attributes.strip())
     for path in [app, *app.rglob("*")]:
         if path.is_symlink():
             continue
@@ -132,7 +135,7 @@ def main():
     args = parser.parse_args()
     if args.verify_only:
         verify_payload(args.app)
-        print("App payload permissions and resource bundle metadata verified.")
+        print("App payload extended attributes, permissions and resource bundle metadata verified.")
         return
     require(args.output is not None and args.output.is_dir(), "Provide an existing --output staging directory.")
     app, output = args.app, args.output
@@ -190,6 +193,10 @@ def main():
     write_plist(resource_info_path, resource_info)
     write_plist(output / "mas.entitlements", entitlements)
     write_plist(output / "requirements.plist", {"os": ["26.0"], "arch": ["arm64", "x86_64"]})
+    # Downloads and copies can carry quarantine, Finder info and other metadata.
+    # Clear the staged app after embedding its profile, before any store signing.
+    # Operate on symlinks themselves so cleanup stays within the staged bundle.
+    subprocess.run(["/usr/bin/xattr", "-crs", str(app)], check=True)
     verify_payload(app)
     print(f"{bundle_id}: version {info['CFBundleShortVersionString']}, build {build_number}")
 
